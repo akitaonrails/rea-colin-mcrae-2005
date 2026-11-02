@@ -8,7 +8,7 @@ ROOT=$(cd "$HERE/../.." && pwd -P)
 T=$(mktemp -d "${TMPDIR:-/tmp}/cmr2005-play-test.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 export HOME=$T
-unset XDG_CONFIG_HOME GAMESCOPE_WAYLAND_DISPLAY DRI_PRIME __NV_PRIME_RENDER_OFFLOAD \
+unset DISPLAY WAYLAND_DISPLAY XDG_CONFIG_HOME GAMESCOPE_WAYLAND_DISPLAY DRI_PRIME __NV_PRIME_RENDER_OFFLOAD \
   WINEDLLOVERRIDES CMR2005_LAUNCHER CMR2005_WAIT CMR2005_GPU 2>/dev/null
 fails=0
 ok() { echo "ok   $1"; }
@@ -61,6 +61,28 @@ got=$(REA_FUNCTIONS_ONLY=1 REA_PLAY_HERE=$T/repo/linux sh -c '
   echo "dropped=${REA_FUNCTIONS_ONLY-unset}/${REA_PLAY_HERE-unset}"' sh "$T/repo/linux/cmr2005-play" 2>&1)
 contains "sourced: configured" "$got" "app=cmr2005-launcher exe=$T/repo/CMR2005Launcher.exe cfg_appdata=CMR2005Launcher"
 contains "sourced: both variables dropped once loaded" "$got" "dropped=unset/unset"
+
+echo "# gamescope's size follows the look and the resolution, as the launcher's does"
+CFGDIR=$T/prefix/drive_c/users/me/AppData/Local/CMR2005Launcher
+mkdir -p "$CFGDIR"
+CFG=$CFGDIR/launcher.cfg
+size() { rm -f "$T/ran"; USER=me sh "$T/repo/linux/cmr2005-play" --play "$@" > /dev/null 2>&1; cat "$T/ran" 2>/dev/null; }
+printf 'look = steam_deck\n' > "$CFG"
+contains "look steam_deck, no resolution: the Deck's screen" "$(size)" "gamescope -W 1280 -H 800 -w 1280 -h 800"
+printf 'look = original\n' > "$CFG"
+contains "look original: the game's own 640x480" "$(size)" "gamescope -W 640 -H 480"
+printf 'look = widescreen\n' > "$CFG"
+contains "look widescreen, unknown screen: 1920x1080" "$(size)" "gamescope -W 1920 -H 1080"
+printf 'look = widescreen\nresolution = 1280x720\n' > "$CFG"
+contains "the file's own resolution wins over its look" "$(size)" "gamescope -W 1280 -H 720"
+contains "--look wins over the file's resolution" "$(size --look steam_deck)" "gamescope -W 1280 -H 800"
+contains "--resolution wins over --look" "$(size --look steam_deck --resolution 2560x1440)" "gamescope -W 2560 -H 1440"
+contains "the flags still reach the launcher" "$(size --look steam_deck)" "--no-window --look steam_deck"
+rm -f "$CFG"
+contains "no launcher.cfg: the first start's Widescreen look" "$(size)" "gamescope -W 1920 -H 1080"
+printf 'game = C:\\CMR\n' > "$CFG"
+contains "launcher.cfg without a look: Widescreen too" "$(size)" "gamescope -W 1920 -H 1080"
+sh "$T/repo/linux/cmr2005-play" stop > /dev/null 2>&1
 
 rm -f "$T/repo/CMR2005Launcher.exe"
 out=$(sh "$T/repo/linux/cmr2005-play" --play 2>&1); rc=$?

@@ -34,3 +34,6 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 - A screen mode the display does not list is replaced by the nearest
   listed 16:9 mode (the game quits at once otherwise).
 - One launcher at a time.
+- `linux/cmr2005-play`: gamescope takes the size the look gives (the
+  screen for Widescreen and the first start, 1280x800 for Steam Deck,
+  640x480 for Original); a `resolution` or flag wins.
