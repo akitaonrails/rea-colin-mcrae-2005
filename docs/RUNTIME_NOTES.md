@@ -193,9 +193,36 @@ headless prefix (w06): the log shows the restart and the window opens.
 - **Reported:** about four or five freezes of roughly half a second during
   the stage; otherwise smooth at about 60 fps. Under investigation.
 
+### 2026-11-02: the unpack window and the portrait main monitor
+
+- **Unpack window** (e13, e14; fresh prefixes, headless gamescope): the
+  first start from the installer shows the window with the photo, a
+  progress bar and the time left ("793 MB of 3.6 GB, about 2 min left"
+  after 40 s), then starts the game by itself. Closing the window (or
+  Cancel) stops innoextract, removes the partial `game.unpacking` folder
+  and ends the launcher; no game folder is left.
+- **Portrait main monitor, no gamescope** (the owner's Hyprland desktop,
+  the AppImage with `--play`, a visible window announced first): the
+  launcher logged "the main monitor is portrait: the game runs in a
+  3840x2160 Wine virtual desktop"; the game ran in the "CMR2005 - Wine
+  Desktop" window on the landscape monitor, past the point where it had
+  stopped with "Adapter has no modes". Closing that window
+  (`WM_DELETE_WINDOW`) ended the game, Wine's explorer, the launcher and
+  the helper within about 20 s.
+- **Freezes reported by the owner** (about 0.5 s, five or six per stage,
+  at the moment a co-driver call appears on screen, found in the owner's
+  recording with ffmpeg `freezedetect`): **not reproduced** headless in
+  three measured drives (MangoHud frame logs, 1080p and 4K, the owner's
+  saved options; no frame over 100 ms while driving). Differences left:
+  real audio output, the pad in use, OBS recording at the same time. Also
+  seen: with the owner's options the game opens the pad's HID device once
+  per frame (8,500 opens in 160 s), apparently re-acquiring it through
+  DirectInput; it caused no stall in these runs. Candidates if it comes
+  back: Wine's sound path for co-driver calls; Xidi for the pad.
+
 ### Not verified yet
 
-- Menu music (WMA) and sound in general (audio went to a null sink).
+- Sound on real speakers beyond what the owner heard while playing.
 - Sound output (it went to the null sink; no errors, nothing measured).
 - Driving a stage (car physics at different frame rates).
 - The game's own Quit, gamescope closed by itself.

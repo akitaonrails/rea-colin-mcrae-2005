@@ -116,9 +116,10 @@ More, including a distrobox, in [linux/README.md](linux/README.md).
 2. Pick a look. **Widescreen** is recommended (**Steam Deck** on a Deck).
 3. Press **Play** (or Enter).
 
-From the installer files, the first start unpacks the game, about 3.4 GB.
-It took about three minutes in testing and nothing shows on screen
-meanwhile. After that, starts are quick.
+From the installer files, the first start unpacks the game, about 3.6 GB,
+in a window that shows the progress and the time left (about three
+minutes in testing). **Cancel** stops it and leaves nothing behind. After
+that, starts are quick.
 
 Then set up the game itself in its own **Options** menu: the graphics
 detail and effects, and your gamepad (see **Gamepad** below). The
@@ -220,10 +221,15 @@ user, and the game reads them from there.
 - **Alt+F4 does nothing in the game:** the keys never reach the game's
   window (it seems to keep the keyboard to itself). Close the window
   instead, or quit from the game's menu.
-- **"Adapter has no modes" when the game starts:** your main monitor is
-  in portrait. The game only looks at the main monitor. On Linux, play
+- **The game opens in a window called "CMR2005 - Wine Desktop":** your
+  main monitor is in portrait, and the game only works on the main
+  monitor, so the launcher gives it a landscape screen of its own inside
+  that window. Make it fullscreen with your desktop's shortcut, or play
   through gamescope (the AppImage and `cmr2005-play` use it when it is
-  installed), or make a landscape monitor the main one.
+  installed). On Windows, make a landscape monitor the main one.
+- **Short freezes of about half a second during a stage:** reported once
+  on Linux, when a co-driver call starts, and not reproduced since. If you
+  see them, please report it with your sound setup and pad.
 - **Anything else:** run `CMR2005Launcher.exe --check`, then open an issue
   with the [bug form](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=bug-report.yml)
   and attach `launcher.log` (remove personal paths). Never attach game files.
@@ -235,11 +241,11 @@ user, and the game reads them from there.
 - Alt+F4 pressed inside the game is not seen. Closing the window works.
 - The frame-rate cap and VSync work under Wine and Proton only. On Windows
   the game keeps its own behaviour.
-- No progress is shown while the installer unpacks (a few minutes).
 - Online play used GameSpy, which is gone.
-- Not tested yet: Windows 10/11, the Steam Deck, Proton, and multi-monitor
-  setups outside gamescope (a portrait main monitor stops the game, see
-  Troubleshooting). See
+- With a portrait main monitor under Wine (no gamescope) the game runs in a
+  window you make fullscreen yourself; on Windows it needs a landscape main
+  monitor.
+- Not tested yet: Windows 10/11, the Steam Deck and Proton. See
   [docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md).
 
 ## Uninstall

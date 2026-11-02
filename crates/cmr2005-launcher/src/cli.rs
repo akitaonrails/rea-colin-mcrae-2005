@@ -133,7 +133,7 @@ pub fn check_report(game: &Path, source: &Source) -> String {
             game.display()
         ),
         Source::Installer(installer) => format!(
-            "Ready to play: {} in {}. The first start unpacks the game (about 3.4 GB).",
+            "Ready to play: {} in {}. The first start unpacks the game (about 3.6 GB).",
             installer.build.name,
             game.display()
         ),

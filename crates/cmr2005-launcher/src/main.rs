@@ -20,9 +20,8 @@ fn main() {
 
 #[cfg(windows)]
 mod app {
-    use std::path::PathBuf;
 
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use cmr2005_launcher::cli::{self, Invocation, Mode};
     use cmr2005_launcher::components::{self, APP_OVERRIDES};
@@ -145,28 +144,28 @@ mod app {
             }
         };
         let path = settings_path();
-        if let Mode::Window { settings_only } = invocation.mode {
-            if wine::is_wine() {
-                match gpu::prefer_glx() {
-                    Ok(true) => {
-                        // Wine chose EGL when this process started; on EGL the
-                        // window's OpenGL setup fails (a fresh prefix's first
-                        // start). The setting counts from the next process, so
-                        // run again; that one finds it set and goes on.
-                        out.log.line(
-                            "settings window: OpenGL through GLX (UseEGL=N); starting again to use it",
-                        );
-                        let exe = std::env::current_exe()
-                            .map_err(|error| format!("Cannot find the launcher: {error}"))?;
-                        // The next process takes the single-instance lock.
-                        drop(instance);
-                        let code = Launch::new(&exe).args(std::env::args().skip(1)).run()?;
-                        return Ok(code as i32);
-                    }
-                    Ok(false) => {}
-                    Err(error) => out.warn(&error.to_string()),
+        if wine::is_wine() && invocation.mode != Mode::Check {
+            match gpu::prefer_glx() {
+                Ok(true) => {
+                    // Wine chose EGL when this process started; on EGL the
+                    // window's OpenGL setup fails (a fresh prefix's first
+                    // start). The setting counts from the next process, so
+                    // run again; that one finds it set and goes on.
+                    out.log.line(
+                        "settings window: OpenGL through GLX (UseEGL=N); starting again to use it",
+                    );
+                    let exe = std::env::current_exe()
+                        .map_err(|error| format!("Cannot find the launcher: {error}"))?;
+                    // The next process takes the single-instance lock.
+                    drop(instance);
+                    let code = Launch::new(&exe).args(std::env::args().skip(1)).run()?;
+                    return Ok(code as i32);
                 }
+                Ok(false) => {}
+                Err(error) => out.warn(&error.to_string()),
             }
+        }
+        if let Mode::Window { settings_only } = invocation.mode {
             let saved = cfg::read_file(&path).ok().flatten();
             match ui::show(&path, saved.as_deref(), invocation.linux) {
                 Ok(ui::Outcome::Play) if settings_only => return Ok(cli::OK),
@@ -184,7 +183,9 @@ mod app {
 
         // Held until the game exits.
         let _instance = instance;
-        let screen = display::screen_size();
+        let gamescope = std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some();
+        let placement = plan::screen(&display::monitors(), wine::is_wine(), gamescope);
+        let screen = placement.size.or_else(display::screen_size);
         let existing = cfg::read_file(&path)
             .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
         let first_run = existing.is_none();
@@ -222,7 +223,9 @@ mod app {
         let game_dir = match &source {
             Source::Installed { dir, .. } => dir.clone(),
             Source::Installer(installer) => {
-                unpack(out, installer, &folders.unpacked, &components_dir)?;
+                if !unpack(out, installer, &folders.unpacked, &components_dir)? {
+                    return Ok(cli::OK);
+                }
                 folders.unpacked.clone()
             }
         };
@@ -258,7 +261,7 @@ mod app {
             screen.map_or("unknown".to_owned(), |(w, h)| format!("{w}x{h}")),
             picture.describe()
         ));
-        if let Some((w, h)) = picture.size() {
+        if let Some((w, h)) = picture.size().filter(|_| !placement.virtual_desktop) {
             let fitted = config::fit_mode((w, h), display::mode_supported);
             if fitted != Some((w, h)) {
                 out.warn(&format!(
@@ -270,7 +273,13 @@ mod app {
                 }));
             }
         }
-        let plan = plan::plan(&picture, &folders.runtime, &folders.saves, wine);
+        let plan = plan::plan_on(
+            &picture,
+            &folders.runtime,
+            &folders.saves,
+            wine,
+            placement.virtual_desktop.then_some(screen).flatten(),
+        );
         install_components(out, &plan, &game_dir, &folders.runtime, &components_dir)?;
         write_registry(out, &plan)?;
         if !plan.app_dll_overrides.is_empty() {
@@ -289,16 +298,33 @@ mod app {
                 Err(error) => out.warn(&error.to_string()),
             }
         }
-        let mut launch = Launch::new(&exe)
-            .cwd(&folders.runtime)
-            .args(plan.args.iter().copied());
+        let mut launch = match plan.virtual_desktop {
+            // The main monitor is portrait: the game sees one landscape
+            // screen, Wine's virtual desktop (Wine's explorer starts it there).
+            Some(size) => {
+                out.log.line(&format!(
+                    "the main monitor is portrait: the game runs in a {}x{} Wine virtual desktop",
+                    size.0, size.1
+                ));
+                let exe_text = exe.display().to_string();
+                Launch::new(r"C:\windows\explorer.exe")
+                    .cwd(&folders.runtime)
+                    .args(plan::desktop_args(size, &exe_text, &plan.args))
+            }
+            None => Launch::new(&exe)
+                .cwd(&folders.runtime)
+                .args(plan.args.iter().copied()),
+        };
         for (name, value) in &plan.env {
             launch = launch.env(*name, *value);
         }
         out.log.line("starting the game");
         let game_process = launch.spawn()?;
         let hook_dll = components_dir.join(components::CLOSE_HOOK_DLL);
+        // In a virtual desktop the process is Wine's explorer, not the game:
+        // closing the desktop window ends the game instead.
         let _hook = match game_process.message_hook(&hook_dll, c"close_hook") {
+            _ if plan.virtual_desktop.is_some() => None,
             Ok(hook) => Some(hook),
             Err(error) => {
                 out.warn(&format!("close hook not installed: {error}"));
@@ -310,22 +336,67 @@ mod app {
         Ok(code as i32)
     }
 
-    /// Unpacks GOG's installer with the bundled innoextract, once.
+    /// innoextract running, watched by the unpack window.
+    struct InnoJob {
+        running: Launched,
+        work: PathBuf,
+        dest: PathBuf,
+        done: u64,
+        scanned: Option<std::time::Instant>,
+    }
+
+    type Launched = rea_launcher_win32::process::Running;
+
+    impl ui::UnpackJob for InnoJob {
+        fn done(&mut self) -> u64 {
+            // Counting the files is cheap but not free: twice a second.
+            if self
+                .scanned
+                .is_none_or(|at| at.elapsed() >= std::time::Duration::from_millis(500))
+            {
+                self.done = source::unpacked_so_far(&self.work);
+                self.scanned = Some(std::time::Instant::now());
+            }
+            self.done
+        }
+
+        fn finished(&mut self) -> Option<Result<(), String>> {
+            let code = self.running.exit_code()?;
+            Some(if code == 0 {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Unpacking the game failed (innoextract exit code {code})."
+                ))
+            })
+        }
+
+        fn cancel(&mut self) {
+            let _ = self
+                .running
+                .close_gracefully(std::time::Duration::from_millis(0));
+            let _ = source::abandon(&self.dest);
+        }
+    }
+
+    /// Unpacks GOG's installer with the bundled innoextract, once, showing
+    /// its progress. `Ok(false)`: the player cancelled.
     fn unpack(
         out: &Out,
         installer: &source::Installer,
         dest: &Path,
         components_dir: &Path,
-    ) -> Result<(), String> {
-        if source::is_unpacked(dest, installer) {
-            return Ok(());
-        }
+    ) -> Result<bool, String> {
         let parent = dest.parent().unwrap_or(dest);
         std::fs::create_dir_all(parent)
             .map_err(|error| format!("Cannot create {}: {error}", parent.display()))?;
+        let source::Begin::Run { args, work } = source::begin(installer, dest)? else {
+            return Ok(true);
+        };
         if let Some(free) = disk::free_space(parent)
             && free < source::UNPACK_BYTES
         {
+            let _ = source::abandon(dest);
             return Err(format!(
                 "Unpacking the game needs about {} GB free in {}; there are {:.1} GB.",
                 source::UNPACK_BYTES / 1_000_000_000,
@@ -333,32 +404,51 @@ mod app {
                 free as f64 / 1e9
             ));
         }
-        let innoextract = components_dir.join(components::INNOEXTRACT);
         out.log.line(&format!(
-            "unpacking {} into {} (a few minutes)",
+            "unpacking {} into {}",
             installer.setup.display(),
             dest.display()
         ));
-        let found = source::unpack(installer, dest, |args| {
-            let code = Launch::new(&innoextract)
-                .args(args.iter().map(String::as_str))
-                .hidden(true)
-                .run()?;
-            if code == 0 {
-                Ok(())
-            } else {
-                Err(format!(
-                    "Unpacking the game from {} failed (innoextract exit code {code}).",
-                    installer.setup.display()
-                ))
+        let innoextract = components_dir.join(components::INNOEXTRACT);
+        let running = Launch::new(&innoextract)
+            .args(args.iter().map(String::as_str))
+            .hidden(true)
+            .spawn()?;
+        let mut job = InnoJob {
+            running,
+            work,
+            dest: dest.to_path_buf(),
+            done: 0,
+            scanned: None,
+        };
+        let result = match ui::show_unpack(installer.build.unpacked, &mut job) {
+            Ok(ui::UnpackOutcome::Finished(result)) => result,
+            Ok(ui::UnpackOutcome::Cancelled) => {
+                out.log.line("unpacking cancelled by the player");
+                return Ok(false);
             }
-        })?;
+            Err(error) => {
+                // No window: wait for innoextract all the same.
+                out.warn(&format!("unpack window unavailable: {error}"));
+                loop {
+                    if let Some(result) = ui::UnpackJob::finished(&mut job) {
+                        break result;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+            }
+        };
+        if let Err(error) = result {
+            let _ = source::abandon(dest);
+            return Err(error);
+        }
+        let found = source::finish(installer, dest)?;
         out.log.line(&format!(
             "unpacked: {} ({})",
             found.exe.display(),
             found.edition.name
         ));
-        Ok(())
+        Ok(true)
     }
 
     /// DXVK in or out through the ledger (a player's own `d3d9.dll`

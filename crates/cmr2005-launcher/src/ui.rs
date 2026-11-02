@@ -13,6 +13,7 @@
 use std::path::PathBuf;
 
 use rea_launcher::cfg::{OptionSpec, spec};
+use rea_launcher_ui::download;
 use rea_launcher_ui::egui::{self, Align2, Rect, RichText, TextureHandle, pos2, vec2};
 use rea_launcher_ui::spec::{mark_rendered, spec_path_row, spec_row};
 use rea_launcher_ui::theme::{body, condensed};
@@ -302,8 +303,106 @@ fn picture_tab(ui: &mut egui::Ui, w: &mut Window) {
     }
 }
 
+/// The unpack window's state: GOG's installer being unpacked on the first
+/// start (`source::begin`/`finish`), so a player never faces a silent
+/// screen for minutes.
+pub struct Unpacking {
+    /// Bytes written so far, and the unpacked game's size.
+    pub done: u64,
+    pub total: u64,
+    /// Seconds since the unpack began, for the time left.
+    pub elapsed: f64,
+    pub hero: Option<TextureHandle>,
+    /// Cancel was pressed (the caller stops innoextract).
+    pub cancel: bool,
+}
+
+impl Unpacking {
+    pub fn new(total: u64) -> Unpacking {
+        Unpacking {
+            done: 0,
+            total,
+            elapsed: 0.0,
+            hero: None,
+            cancel: false,
+        }
+    }
+
+    /// The bar's fraction, never past full.
+    pub fn fraction(&self) -> f32 {
+        (self.done as f64 / self.total.max(1) as f64).min(1.0) as f32
+    }
+
+    /// "1.2 GB of 3.6 GB, about 2 minutes left" (the time once there is a rate).
+    pub fn status(&self) -> String {
+        let sizes = format!(
+            "{} of {}",
+            download::size_text(self.done.min(self.total)),
+            download::size_text(self.total)
+        );
+        if self.elapsed < 3.0 || self.done == 0 {
+            return sizes;
+        }
+        let rate = self.done as f64 / self.elapsed;
+        let left = self.total.saturating_sub(self.done) as f64 / rate;
+        format!("{sizes}, {}", download::time_left(left))
+    }
+}
+
+/// The unpack window, filling `ui`: the photo, what is happening and why,
+/// the progress, and Cancel.
+pub fn draw_unpack(ui: &mut egui::Ui, u: &mut Unpacking) {
+    let full = ui.max_rect();
+    ui.painter().rect_filled(full, 0.0, BASE);
+    let layout = Layout::new(full, PHOTO_W);
+    draw_hero(ui, layout.photo, u.hero.as_ref());
+    ui.scope_builder(egui::UiBuilder::new().max_rect(layout.body), |ui| {
+        ui.add(
+            egui::Label::new(
+                RichText::new("Colin McRae Rally 2005")
+                    .font(condensed(38.0))
+                    .color(INK),
+            )
+            .wrap(),
+        );
+        ui.label(
+            RichText::new("Unpacking the game. This happens only on the first start.")
+                .font(body(14.0))
+                .color(MUTED),
+        );
+        ui.add_space(24.0);
+        widgets::heading(ui, "Unpacking from GOG's installer");
+        ui.add_space(6.0);
+        widgets::progress_bar(ui, u.fraction());
+        ui.add_space(6.0);
+        widgets::note(ui, &u.status());
+        ui.add_space(14.0);
+        widgets::note(
+            ui,
+            "The launcher copies the game out of your installer files into its own \
+             folder, about 3.6 GB. Your installer files are only read. The game starts \
+             as soon as this is done.",
+        );
+    });
+    let button = Rect::from_min_size(
+        pos2(
+            layout.footer.right() - 150.0,
+            layout.footer.center().y - 20.0,
+        ),
+        vec2(130.0, 40.0),
+    );
+    let cancel = ui
+        .scope_builder(egui::UiBuilder::new().max_rect(button), |ui| {
+            widgets::outline_button(ui, "Cancel")
+        })
+        .inner;
+    if cancel.clicked() {
+        u.cancel = true;
+    }
+}
+
 #[cfg(windows)]
-pub use app::{Outcome, show};
+pub use app::{Outcome, UnpackJob, UnpackOutcome, show, show_unpack};
 
 #[cfg(windows)]
 mod app {
@@ -330,6 +429,86 @@ mod app {
         Play,
         /// Closed without Play.
         Closed,
+    }
+
+    /// The unpack the window watches (implemented in `main.rs` over
+    /// innoextract's process).
+    pub trait UnpackJob {
+        /// Bytes written so far.
+        fn done(&mut self) -> u64;
+        /// The result once innoextract has ended.
+        fn finished(&mut self) -> Option<Result<(), String>>;
+        /// Stops it (Cancel, or the window closed).
+        fn cancel(&mut self);
+    }
+
+    /// How the unpack window ended.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum UnpackOutcome {
+        Finished(Result<(), String>),
+        Cancelled,
+    }
+
+    struct UnpackApp<'a> {
+        state: super::Unpacking,
+        fit: WindowFit,
+        job: &'a mut dyn UnpackJob,
+        started: std::time::Instant,
+        outcome: &'a mut Option<UnpackOutcome>,
+    }
+
+    /// Shows the unpack window until `job` ends or the player cancels.
+    pub fn show_unpack(total: u64, job: &mut dyn UnpackJob) -> Result<UnpackOutcome, String> {
+        let scale = display::wine_dpi_scale();
+        let screen = display::screen_size();
+        let fit = WindowFit::new(SIZE, wine::is_wine(), screen, scale).with_native_fit(true);
+        let options = fit.native_options("Colin McRae Rally 2005");
+        let mut outcome = None;
+        eframe::run_native(
+            "Colin McRae Rally 2005",
+            options,
+            Box::new(|cc| {
+                theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
+                crate::palette::light_widgets(&cc.egui_ctx);
+                let mut state = super::Unpacking::new(total);
+                state.hero =
+                    HERO_JPEG.and_then(|jpeg| widgets::load_jpeg(&cc.egui_ctx, "hero", jpeg));
+                Ok(Box::new(UnpackApp {
+                    state,
+                    fit,
+                    job,
+                    started: std::time::Instant::now(),
+                    outcome: &mut outcome,
+                }))
+            }),
+        )
+        .map_err(|error| error.to_string())?;
+        // Closed some other way: stop the unpack too.
+        Ok(outcome.unwrap_or(UnpackOutcome::Cancelled))
+    }
+
+    impl eframe::App for UnpackApp<'_> {
+        fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+            let ctx = ui.ctx().clone();
+            self.fit.first_frame(&ctx);
+            if self.outcome.is_none() {
+                if let Some(result) = self.job.finished() {
+                    *self.outcome = Some(UnpackOutcome::Finished(result));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                } else {
+                    self.state.done = self.job.done();
+                    self.state.elapsed = self.started.elapsed().as_secs_f64();
+                }
+            }
+            let closing = ctx.input(|input| input.viewport().close_requested());
+            super::draw_unpack(ui, &mut self.state);
+            if self.outcome.is_none() && (self.state.cancel || closing) {
+                self.job.cancel();
+                *self.outcome = Some(UnpackOutcome::Cancelled);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            ctx.request_repaint_after(Duration::from_millis(250));
+        }
     }
 
     struct App<'a> {
@@ -455,6 +634,31 @@ mod tests {
     fn flags(args: &[&str]) -> Settings {
         let args = args.iter().map(|arg| (*arg).to_owned());
         config::parse_args(args).unwrap().0
+    }
+
+    #[test]
+    fn the_unpack_window_shows_progress_and_time_left() {
+        let mut u = Unpacking::new(3_600_000_000);
+        assert_eq!(u.status(), "0 MB of 3.6 GB");
+        u.done = 1_200_000_000;
+        u.elapsed = 60.0;
+        assert_eq!(u.status(), "1.2 GB of 3.6 GB, about 2 min left");
+        assert!((u.fraction() - 1.0 / 3.0).abs() < 1e-6);
+        u.done = 4_000_000_000;
+        assert_eq!(u.fraction(), 1.0, "never past full");
+        assert!(u.status().starts_with("3.6 GB of 3.6 GB"));
+    }
+
+    #[test]
+    fn the_unpack_window_can_be_cancelled() {
+        let mut ui = testing::harness(&PALETTE, &METRICS, Unpacking::new(100), draw_unpack);
+        crate::palette::light_widgets(&ui.ctx);
+        ui.run();
+        assert!(ui.query_by_label_contains("first start").is_some());
+        assert!(ui.query_by_label_contains("of 100 B").is_none());
+        ui.get_by_role_and_label(Role::Button, "Cancel").click();
+        ui.run();
+        assert!(ui.state().cancel);
     }
 
     #[test]

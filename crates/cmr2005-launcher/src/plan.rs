@@ -34,11 +34,65 @@ pub struct Plan {
     pub env: Vec<(&'static str, &'static str)>,
     /// Windows only: the fast-GPU preference for the runtime's exe.
     pub prefer_fast_gpu: bool,
+    /// Under Wine outside gamescope with a portrait main monitor: the game
+    /// runs in a Wine virtual desktop of this size, the one landscape
+    /// screen it then sees (it only looks at the main monitor's modes).
+    pub virtual_desktop: Option<(u32, u32)>,
+}
+
+/// The name of the Wine virtual desktop (`explorer /desktop=NAME,WxH`).
+pub const DESKTOP_NAME: &str = "CMR2005";
+
+/// Where the game should run. `monitors`: what Windows (Wine) reports;
+/// `gamescope`: inside gamescope, which shows Wine one landscape screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Screen {
+    /// The size the looks fit to.
+    pub size: Option<(u32, u32)>,
+    /// Whether the game needs a virtual desktop (Wine, no gamescope, a
+    /// portrait main monitor beside a landscape one).
+    pub virtual_desktop: bool,
+}
+
+pub fn screen(monitors: &[rea_launcher::display::Monitor], wine: bool, gamescope: bool) -> Screen {
+    use rea_launcher::display;
+    match display::game_monitor(monitors) {
+        Some(index) => Screen {
+            size: Some(monitors[index].size()),
+            virtual_desktop: wine && !gamescope,
+        },
+        None => Screen {
+            size: display::primary(monitors).map(display::Monitor::size),
+            virtual_desktop: false,
+        },
+    }
+}
+
+/// `explorer.exe`'s arguments for the game in the virtual desktop.
+pub fn desktop_args(size: (u32, u32), exe: &str, args: &[&str]) -> Vec<String> {
+    let mut out = vec![
+        format!("/desktop={DESKTOP_NAME},{}x{}", size.0, size.1),
+        exe.to_owned(),
+    ];
+    out.extend(args.iter().map(|arg| (*arg).to_owned()));
+    out
 }
 
 /// The plan for `picture` with the game running from `runtime` and saving
 /// to `saves`, under Wine or not.
 pub fn plan(picture: &Picture, runtime: &Path, saves: &Path, wine: bool) -> Plan {
+    plan_on(picture, runtime, saves, wine, None)
+}
+
+/// [`plan`] with the virtual desktop's screen size when one is needed
+/// (`desktop`: the landscape monitor's size).
+pub fn plan_on(
+    picture: &Picture,
+    runtime: &Path,
+    saves: &Path,
+    wine: bool,
+    desktop: Option<(u32, u32)>,
+) -> Plan {
     let mut args = Vec::new();
     if picture.widescreen() {
         args.push(WIDESCREEN_ARG);
@@ -65,6 +119,10 @@ pub fn plan(picture: &Picture, runtime: &Path, saves: &Path, wine: bool) -> Plan
         },
         env: vec![(rea_close_hook::ENV, CLOSE_HOOK_CONFIG)],
         prefer_fast_gpu: !wine,
+        // The desktop is the game's whole screen: its mode, else the monitor.
+        virtual_desktop: desktop
+            .filter(|_| wine)
+            .map(|screen| picture.size().unwrap_or(screen)),
     }
 }
 
@@ -83,6 +141,9 @@ impl Plan {
         let _ = writeln!(out, "components installed: {}", list(&self.installed));
         let _ = writeln!(out, "components taken out: {}", list(&self.taken_out));
         let _ = writeln!(out, "prefer fast GPU: {}", self.prefer_fast_gpu);
+        if let Some((w, h)) = self.virtual_desktop {
+            let _ = writeln!(out, "Wine virtual desktop: {DESKTOP_NAME},{w}x{h}");
+        }
         let _ = writeln!(out, "\n[registry HKLM\\{}]", registry::KEY);
         for write in &self.registry {
             let _ = writeln!(out, "{write}");
@@ -156,6 +217,86 @@ mod tests {
         assert_eq!(plan.files, [(DXVK_CONF, None)]);
         assert!(plan.app_dll_overrides.is_empty());
         assert!(plan.prefer_fast_gpu);
+    }
+
+    #[test]
+    fn a_portrait_main_monitor_gets_a_virtual_desktop_outside_gamescope() {
+        use rea_launcher::display::Monitor;
+        let portrait = Monitor {
+            width: 2160,
+            height: 3840,
+            primary: true,
+        };
+        let landscape = Monitor {
+            width: 3840,
+            height: 2160,
+            primary: false,
+        };
+        let both = [portrait, landscape];
+        assert_eq!(
+            screen(&both, true, false),
+            Screen {
+                size: Some((3840, 2160)),
+                virtual_desktop: true
+            }
+        );
+        assert!(
+            !screen(&both, true, true).virtual_desktop,
+            "gamescope shows one screen"
+        );
+        assert!(
+            !screen(&both, false, false).virtual_desktop,
+            "Windows: not Wine"
+        );
+        assert_eq!(screen(&both, false, false).size, Some((3840, 2160)));
+        let usual = [
+            Monitor {
+                primary: true,
+                ..landscape
+            },
+            Monitor {
+                primary: false,
+                ..portrait
+            },
+        ];
+        assert_eq!(
+            screen(&usual, true, false),
+            Screen {
+                size: Some((3840, 2160)),
+                virtual_desktop: false
+            }
+        );
+        let only_portrait = [portrait];
+        assert!(!screen(&only_portrait, true, false).virtual_desktop);
+
+        let plan = plan_on(
+            &picture(Resolution::Size(2560, 1440)),
+            Path::new("/r"),
+            Path::new("/s"),
+            true,
+            Some((3840, 2160)),
+        );
+        assert_eq!(plan.virtual_desktop, Some((2560, 1440)), "the game's mode");
+        let original = plan_on(
+            &picture(Resolution::Original),
+            Path::new("/r"),
+            Path::new("/s"),
+            true,
+            Some((3840, 2160)),
+        );
+        assert_eq!(
+            original.virtual_desktop,
+            Some((3840, 2160)),
+            "else the monitor"
+        );
+        assert_eq!(
+            desktop_args((2560, 1440), r"C:\r\cmr5.exe", &["WIDESCREENDISPLAY"]),
+            [
+                "/desktop=CMR2005,2560x1440",
+                r"C:\r\cmr5.exe",
+                "WIDESCREENDISPLAY"
+            ]
+        );
     }
 
     #[test]

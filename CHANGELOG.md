@@ -34,6 +34,12 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 - A screen mode the display does not list is replaced by the nearest
   listed 16:9 mode (the game quits at once otherwise).
 - One launcher at a time.
+- The first start from GOG's installer shows a window with the unpack's
+  progress and the time left; Cancel stops it and removes the partial
+  copy.
+- Under Wine outside gamescope with a portrait main monitor, the game runs
+  in a Wine virtual desktop sized to the landscape monitor (it stopped
+  with "Adapter has no modes" otherwise).
 - A new Wine prefix's first start no longer fails to open the settings
   window ("failed to find a matching configuration"): after switching Wine
   to GLX the launcher starts itself again, so the switch applies.
