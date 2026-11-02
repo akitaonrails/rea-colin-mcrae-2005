@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Colin McRae Rally 2005 Launcher
+Comment=Play your own copy of Colin McRae Rally 2005 with modern compatibility fixes
+Exec=cmr2005-play
+Icon=cmr2005-launcher
+Terminal=false
+Categories=Game;

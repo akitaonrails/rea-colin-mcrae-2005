@@ -144,10 +144,35 @@ Command-line switches (readme plus strings): `NOSOUND`, `NOHARDWARESOUND`,
 hangs under Wine. On Windows players normally run the GOG installer, which
 writes the registry values itself.
 
-**Proposed (owner decision pending):** the launcher accepts either an
+**Decision (owner, 2026-11-02):** the launcher accepts either an
 installed game folder or the GOG installer files. From the installer it
 unpacks the game into its own folder (an Inno Setup reader, pinned, no
 manual step), so Linux and Steam Deck players never run `setup_colin2005.exe`.
+
+## Owner decisions (2026-11-02)
+
+- Launcher id `cmr2005`, environment prefix `CMR2005_`, program
+  `CMR2005Launcher.exe`, Linux helper `linux/cmr2005-play`.
+- Game source: an installed folder **or** the GOG installer files (see above).
+- Registry on Windows: the launcher writes `INSTALL_PATH`/`SAVEGAME_PATH`
+  per user, under `HKCU\Software\Classes\VirtualStore\MACHINE\SOFTWARE\WOW6432Node\CODEMASTERS\Colin McRae Rally 2005`,
+  which a non-elevated 32-bit program without a manifest reads in place of
+  HKLM. No admin rights. Wine has no registry virtualization, so this needs
+  one check on a real Windows PC; inside the launcher's own Wine prefix it
+  writes HKLM directly.
+
+## The problems the launcher will solve
+
+1. The startup crash at `0x41DA27` (Wine and copied installs): the launcher
+   writes the install and save paths the game needs.
+2. The GOG installer hanging under Wine: the launcher unpacks the game
+   from the installer itself.
+3. 640×480 on first start: the resolution follows the player's screen
+   (`WIDTH`/`HEIGHT`), with widescreen through the game's own
+   `WIDESCREENDISPLAY` switch once verified.
+4. Saves kept outside the runtime copy (`SAVEGAME_PATH`), mirrored safely.
+5. Controllers: XInput pads with rumble through Xidi (to verify).
+6. The rest of the trouble-spot list above, as each is verified.
 
 ## Sources
 
