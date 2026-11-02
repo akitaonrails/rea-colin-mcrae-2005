@@ -93,9 +93,11 @@ fn every_option_has_a_working_flag() {
 fn bad_command_lines_say_what_is_wrong() {
     let message = |args: &[&str]| parse(args).unwrap_err();
     assert!(message(&["--vsync", "maybe"]).contains("--vsync needs on or off, not maybe"));
-    assert!(message(&["--look", "shiny"]).contains("original, recommended or steam_deck"));
+    assert!(message(&["--look", "shiny"]).contains("original, widescreen or steam_deck"));
     assert!(message(&["--resolution", "10x10"]).contains("WIDTHxHEIGHT or original"));
     assert!(message(&["--resolution"]).contains("--resolution needs a value"));
+    assert!(message(&["--fps-limit", "fast"]).contains("--fps-limit"));
+    assert!(message(&["--fps-limit", "5000"]).contains("--fps-limit"));
     assert!(message(&["--frobnicate"]).contains("unknown argument --frobnicate"));
     assert!(message(&["--frobnicate"]).contains("--help"));
     assert!(message(&["--settings", "--no-window"]).contains("cannot be used together"));
@@ -108,7 +110,8 @@ fn help_lists_every_option_and_switch() {
         assert!(usage.contains(switch), "{switch}");
     }
     assert!(usage.contains("--vsync on|off"));
-    assert!(usage.contains("--look original|recommended|steam_deck"));
+    assert!(usage.contains("--fps-limit"));
+    assert!(usage.contains("--look original|widescreen|steam_deck"));
 }
 
 #[test]

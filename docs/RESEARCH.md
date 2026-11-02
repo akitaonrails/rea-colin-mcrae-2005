@@ -124,17 +124,39 @@ Command-line switches (readme plus strings): `NOSOUND`, `NOHARDWARESOUND`,
 | appoloin/install-scripts | runs the GOG setup under Wine after winetricks (directplay, directshow, lavfilters, wmp9/11, xact) | n/a | ? | GOG | **Not used**: the launcher avoids the installer and writes the registry itself |
 | Wine bug 38198 | same crash, "fixed" by reinstalling | — | — | — | Explained above |
 
+## The widescreen view (static analysis)
+
+`WIDESCREENDISPLAY` sets the flag byte `0xb64132` (command-line parser at
+`0x585fcb`); `IsWidescreen()` at `0x588170` returns that flag **or** bit 26
+of the saved options word at `0xb114b4` (an in-game setting). The camera
+code at `0x4670a0` and `0x467300` picks fixed scale pairs: 1.33 × 0.75
+normally, 1.209 × 0.682 widescreen (ratio 1.773, i.e. 16:9), 0.76 × 1.011
+for `ROTATEDDISPLAY`.
+
+**Inference:** the widescreen view is exact only at 16:9. At 16:10 it is
+about 10% too narrow; at 21:9 it is stretched by a third (run r12).
+
+**Decision:** like CMR4, the launcher gives the widescreen view only at
+16:9 sizes, and the Widescreen look uses the largest 16:9 size that fits
+the screen. A patch that writes `0.682 × width/height` into the two
+`0x3f9ac083` constants (at `0x4670d2` and `0x467332`) would make any
+shape exact; it is a candidate for a later version, after checking the
+cockpit and replay cameras.
+
 ## Old-game trouble spots
 
 | Spot | Status |
 |---|---|
 | Missing install registry → crash | **Solved** (launcher writes the values) |
-| Resolution / aspect | `WIDTH`/`HEIGHT` registry values work; widescreen look via `WIDESCREENDISPLAY` to verify; HUD stretch to check |
-| Intro videos and music (WMV/WMA via Windows Media) | to check: the title and menus came up, but whether the intro videos and menu music actually play under Wine is not verified yet |
+| Resolution / aspect | `WIDTH`/`HEIGHT` registry values work; `WIDESCREENDISPLAY` is exact at 16:9 (HUD fine), see above |
+| Intro videos (WMV) | play under Wine 11.21 with GStreamer (run r07); music (WMA) not checked |
+| Renderer speed | WineD3D: about 20 fps in a stage; DXVK: over 1000 (runs r08–r10) |
+| Frame-rate independence | the stage timer keeps real time at 20–1450 fps |
 | DirectSound3D / EAX | to check (audio went to a null sink; no errors) |
 | Timers / frame pacing at 150+ fps | to check in a stage |
 | Multi-core affinity | the game imports affinity APIs; to check |
-| Focus loss, Alt+F4, every quit path | to check |
+| Alt+F4, window close | **ignored by the game** (runs r13–r14): the close hook is needed |
+| Focus loss | to check |
 | DirectInput controllers | to check (Xidi) |
 | Service Area crash (Wine bug 22232) | to check |
 

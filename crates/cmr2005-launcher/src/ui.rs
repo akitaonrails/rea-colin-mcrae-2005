@@ -23,6 +23,7 @@ use crate::config::{Look, OPTIONS};
 use crate::edition;
 use crate::form::Form;
 use crate::palette::{ACCENT, BASE, ERROR, INK, MUTED, PANEL};
+use crate::source::{self, Source};
 
 /// Width of the hero image strip.
 pub const PHOTO_W: f32 = 280.0;
@@ -77,8 +78,9 @@ pub fn check_game(folder: &str) -> Check {
     if folder.is_empty() {
         return Check::Empty;
     }
-    match edition::find(std::path::Path::new(folder)) {
-        Ok(found) => Check::Found(found.edition.name),
+    match source::detect(std::path::Path::new(folder)) {
+        Ok(Source::Installed { found, .. }) => Check::Found(found.edition.name),
+        Ok(Source::Installer(installer)) => Check::Found(installer.build.name),
         Err(problem) => Check::Problem(problem),
     }
 }
@@ -220,13 +222,18 @@ fn play_tab(ui: &mut egui::Ui, w: &mut Window) {
     let (note, color) = match &w.check {
         Check::Empty if w.linux => (
             format!(
-                "Choose the folder with {}. Under Wine, Z:\\ is your Linux root folder.",
-                edition::GAME_EXE
+                "Choose the folder with {} or GOG's {}. Under Wine, Z:\\ is your Linux root folder.",
+                edition::GAME_EXE,
+                source::SETUP_EXE
             ),
             MUTED,
         ),
         Check::Empty => (
-            format!("Choose the folder with {}.", edition::GAME_EXE),
+            format!(
+                "Choose the folder with {} or GOG's {}.",
+                edition::GAME_EXE,
+                source::SETUP_EXE
+            ),
             MUTED,
         ),
         Check::Found(name) => (format!("Found {name}."), ACCENT),
@@ -353,7 +360,9 @@ mod app {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
                 let mut window = Window::new(&text, screen);
                 window.linux = linux;
-                window.pick = || dialog::pick_folder("Choose the folder with cmr5.exe");
+                window.pick = || {
+                    dialog::pick_folder("Choose the folder with cmr5.exe or setup_colin2005.exe")
+                };
                 window.hero =
                     HERO_JPEG.and_then(|jpeg| widgets::load_jpeg(&cc.egui_ctx, "hero", jpeg));
                 Ok(Box::new(App {
@@ -463,7 +472,7 @@ mod tests {
         assert_eq!(saved.picture(screen), flag.picture(screen));
         assert_eq!(
             saved.picture(screen).resolution,
-            Some(Resolution::Size(1280, 800))
+            Some(Resolution::Size(1280, 720))
         );
         assert!(testing::checked(&ui.get_by_label("Steam Deck")));
     }

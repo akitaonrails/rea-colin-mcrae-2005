@@ -7,14 +7,24 @@
 //!   `--help`, the template and the window rows.
 //! - [`cli`]: what a command line asks for, and the `--check` report.
 //! - [`form`]: the settings window's state as `launcher.cfg` text.
+//! - [`source`]: an installed game, or GOG's installer to unpack.
 //! - [`runtime`]: the private runtime copy of the game folder.
+//! - [`saves`]: the launcher's folders and the saves folder.
+//! - [`registry`]: the game's registry key and what a launch writes.
+//! - [`components`]: DXVK, the close hook, innoextract, `dxvk.conf`.
+//! - [`plan`]: everything one launch changes, for `main` and the tests.
 //! - `palette`, `ui`: the settings window (Windows, and the host's tests).
 
 pub mod cli;
+pub mod components;
 pub mod config;
 pub mod edition;
 pub mod form;
+pub mod plan;
+pub mod registry;
 pub mod runtime;
+pub mod saves;
+pub mod source;
 
 #[cfg(any(windows, test))]
 pub mod palette;

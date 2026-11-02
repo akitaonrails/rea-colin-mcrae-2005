@@ -7,7 +7,8 @@ use rea_launcher::cfg::ArgError;
 use rea_launcher::paths;
 
 use crate::config::{self, Settings};
-use crate::edition::{self, Found};
+use crate::edition;
+use crate::source::{self, Source};
 
 /// Exit codes. The Linux helper reads the `--settings` ones.
 pub const OK: i32 = 0;
@@ -107,26 +108,34 @@ pub fn game_folder(settings: &Settings, cwd: &Path) -> Result<PathBuf, String> {
     let game = settings.game.as_deref().ok_or_else(|| {
         format!(
             "No game folder yet. Choose it in the settings window, or run:\n\n\
-             CMR2005Launcher.exe --game <the folder with {}>",
-            edition::GAME_EXE
+             CMR2005Launcher.exe --game <the folder with {} or {}>",
+            edition::GAME_EXE,
+            source::SETUP_EXE
         )
     })?;
     paths::resolve(game, cwd)
 }
 
-/// `--check`: the game folder and its edition, or why it cannot be played.
-pub fn check(settings: &Settings, cwd: &Path) -> Result<(PathBuf, Found), String> {
+/// `--check`: the game folder and what it holds, or why it cannot be played.
+pub fn check(settings: &Settings, cwd: &Path) -> Result<(PathBuf, Source), String> {
     let game = game_folder(settings, cwd)?;
-    let found = edition::find(&game)?;
-    Ok((game, found))
+    let source = source::detect(&game)?;
+    Ok((game, source))
 }
 
 /// The `--check` report for a playable folder.
-pub fn check_report(game: &Path, found: &Found) -> String {
-    format!(
-        "Ready to play: {} ({}) in {}",
-        edition::GAME_EXE,
-        found.edition.name,
-        game.display()
-    )
+pub fn check_report(game: &Path, source: &Source) -> String {
+    match source {
+        Source::Installed { found, .. } => format!(
+            "Ready to play: {} ({}) in {}",
+            edition::GAME_EXE,
+            found.edition.name,
+            game.display()
+        ),
+        Source::Installer(installer) => format!(
+            "Ready to play: {} in {}. The first start unpacks the game (about 3.4 GB).",
+            installer.build.name,
+            game.display()
+        ),
+    }
 }

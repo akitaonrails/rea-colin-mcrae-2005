@@ -83,11 +83,40 @@ After every run the process table was checked by command line and by
 leftover (r01's gamescope, after its child failed) was ended by its exact PID.
 gamescope 3.17.0 segfaults on exit, as CMR4 recorded.
 
+### 2026-11-02: stage, renderer, widescreen, quitting (original game, no launcher yet)
+
+Same setup as above. `stage.sh` clears `SG`, presses Enter through
+Challenges → Time Trial → Stages → name → nationality → car → stage, and
+takes screenshots 10 s and 20 s into the stage (Australia, Subaru).
+
+| Run | Change | Result |
+|---|---|---|
+| r07 | screenshots every 4 s from start | **intro videos play** (Codemasters, NVIDIA, Sound Blaster, GameSpy, attract) through Wine's GStreamer; the stage loads; `SG\OPTIONS` and `SG\BESTTIMES_GHOSTS` written |
+| r08 | `WIDESCREENDISPLAY`, WineD3D, `WINEDEBUG=fps` | correct proportions at 1920×1080 (round dials, car no longer stretched); menus 130–260 fps, **the stage only about 20 fps** |
+| r09/r10 | DXVK 3.1.1 `d3d9.dll`, `d3d9=n,b` | same picture; **about 1450 fps** in the stage (DXVK HUD) |
+| r11 | 1280×800 (16:10), DXVK | runs (690 fps); proportions look close but not exact (see the widescreen analysis in `RESEARCH.md`) |
+| r12 | 2560×1080 (21:9) | **stretched**: the widescreen view is fixed at 16:9 |
+| r13 | Alt+F4 at the main menu (XTest) | **ignored**: game still running, screen dark |
+| r14 | `WM_DELETE_WINDOW` to every `cmr5.exe` window | **ignored** |
+| r15 | `dxvk.conf`: `d3d9.maxFrameRate = 45` | 44.9 fps in the stage |
+| r16 | `dxvk.conf`: `d3d9.presentInterval = 1` | 59.9 fps (gamescope headless at 60 Hz) |
+
+The stage timer kept wall-clock time at 20, 45 and 1450 fps (12.2–12.3 s
+of stage time over 12–13 s of wall time between screenshots). Car physics
+at different frame rates needs a person driving.
+
+Files the game wrote in its own folder during these runs: only
+`SG\OPTIONS` and `SG\BESTTIMES_GHOSTS` (checked with a marker file
+before r11).
+
+innoextract 1.9's Windows build unpacked the owner's installer under Wine
+11.21 in 162 s (from the NAS), byte-identical to the Linux innoextract's output.
+
 ### Not verified yet
 
-- Intro videos (`data\Videos\*.wmv`) and menu music (WMA): whether they play under Wine.
+- Menu music (WMA) and sound in general (audio went to a null sink).
 - Sound output (it went to the null sink; no errors, nothing measured).
-- Driving a stage: rendering in-race, frame pacing, physics timing above 60 fps.
-- Saves written to `SAVEGAME_PATH`.
-- `WIDESCREENDISPLAY` (aspect, HUD), DXVK, controllers, Alt+F4 and the other quit paths.
+- Driving a stage (car physics at different frame rates).
+- Saves written to `SAVEGAME_PATH` (pointing at a folder other than `SG`).
+- Controllers. The close hook with `PC_CMR5` (the launcher is not run yet).
 - Windows: how the launcher provides the registry values without admin rights.

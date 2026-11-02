@@ -22,15 +22,26 @@ fn main() {
 mod app {
     use std::path::PathBuf;
 
+    use std::path::Path;
+
     use cmr2005_launcher::cli::{self, Invocation, Mode};
-    use cmr2005_launcher::config;
-    use cmr2005_launcher::{runtime, ui};
+    use cmr2005_launcher::components::{self, APP_OVERRIDES};
+    use cmr2005_launcher::registry::{self, RegValue};
+    use cmr2005_launcher::saves::{self, Folders};
+    use cmr2005_launcher::source::{self, Source};
+    use cmr2005_launcher::{config, edition, plan, runtime, ui};
+    use rea_launcher::ledger::{Ledger, Outcome};
     use rea_launcher::log::Log;
-    use rea_launcher::{cfg, fsx};
+    use rea_launcher::{cfg, fsx, paths};
     use rea_launcher_win32::console::{self, Output};
     use rea_launcher_win32::dialog::{self, Icon};
+    use rea_launcher_win32::instance::{self, Window};
     use rea_launcher_win32::process::Launch;
-    use rea_launcher_win32::{display, gpu, wine};
+    use rea_launcher_win32::reg::Key;
+    use rea_launcher_win32::{disk, display, gpu, wine};
+
+    /// The single-instance name (a named mutex per user session).
+    const INSTANCE: &str = "cmr2005";
 
     const TITLE: &str = "Colin McRae Rally 2005";
 
@@ -116,6 +127,23 @@ mod app {
             out.say(&config::usage(), Icon::Info);
             return Ok(cli::OK);
         }
+        // Held until the game exits: a second start brings the window
+        // forward, or says the game is running; an action flag is refused.
+        let _instance = match instance::single(INSTANCE) {
+            Ok(guard) => guard,
+            Err(running) => {
+                if invocation.mode == Mode::Check {
+                    return Err(
+                        "The launcher is already open; close it first, or use its window.".into(),
+                    );
+                }
+                if !running.bring_to_front(Window::Title(TITLE)) {
+                    out.say("Colin McRae Rally 2005 is already running.", Icon::Info);
+                }
+                out.log.line("second start: another launcher is running");
+                return Ok(cli::OK);
+            }
+        };
         let path = settings_path();
         if let Mode::Window { settings_only } = invocation.mode {
             if wine::is_wine() {
@@ -153,56 +181,216 @@ mod app {
         }
         let settings = saved.clone().merged(invocation.flags);
         let cwd = std::env::current_dir().unwrap_or_default();
-        let (game, found) = cli::check(&settings, &cwd)?;
-        out.log.line(&format!(
-            "game: {} ({}, {})",
-            game.display(),
-            found.edition.name,
-            found.exe.display()
-        ));
+        let (game, source) = cli::check(&settings, &cwd)?;
+        out.log
+            .line(&format!("game: {} ({})", game.display(), source.describe()));
         if invocation.mode == Mode::Check {
-            out.say(&cli::check_report(&game, &found), Icon::Info);
+            out.say(&cli::check_report(&game, &source), Icon::Info);
             return Ok(cli::OK);
         }
-
-        let runtime_dir = settings
-            .runtime
-            .clone()
-            .unwrap_or_else(|| home().join("runtime"));
-        let report = runtime::prepare(&game, &runtime_dir)?;
-        for warning in &report.warnings {
-            out.warn(warning);
-        }
-        out.log.line(&format!(
-            "runtime: {} ({} brought, {} linked)",
-            runtime_dir.display(),
-            report.brought,
-            report.linked
-        ));
-        // Phase 4 of the playbook: components, the game's own configuration
-        // (generated from the picture below), patches. Log every decision.
-        out.log
-            .line(&format!("picture: {}", settings.picture(screen).describe()));
-
         if first_run || saved.game.as_ref() != Some(&game) {
             let text = config::set(&text, "game", &game.display().to_string());
             fsx::write_atomic(&path, text)
                 .map_err(|error| format!("Cannot save {}: {error}", path.display()))?;
         }
-        let exe_name = found
-            .exe
-            .file_name()
-            .ok_or("the game's exe has no file name")?;
-        let exe = runtime_dir.join(exe_name);
-        if !wine::is_wine() {
+
+        let wine = wine::is_wine();
+        let components_dir = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join(components::DIR)))
+            .ok_or("Cannot find the launcher's components folder.")?;
+        components::validate(&components_dir, wine)?;
+        for line in components::describe(&components_dir) {
+            out.log.line(&format!("component {line}"));
+        }
+
+        let folders = Folders::new(&home(), settings.runtime.as_deref());
+        let game_dir = match &source {
+            Source::Installed { dir, .. } => dir.clone(),
+            Source::Installer(installer) => {
+                unpack(out, installer, &folders.unpacked, &components_dir)?;
+                folders.unpacked.clone()
+            }
+        };
+        paths::check_separate(&game_dir, &folders.runtime)?;
+        let report = runtime::prepare(&game_dir, &folders.runtime)?;
+        for warning in &report.warnings {
+            out.warn(warning);
+        }
+        out.log.line(&format!(
+            "runtime: {} ({} brought, {} linked)",
+            folders.runtime.display(),
+            report.brought,
+            report.linked
+        ));
+        match saves::import(&game_dir, &folders.saves) {
+            Ok(copied) if !copied.is_empty() => out.log.line(&format!(
+                "saves: copied {} from the game folder into {}",
+                copied.join(", "),
+                folders.saves.display()
+            )),
+            Ok(_) => {}
+            Err(error) => {
+                return Err(format!(
+                    "Cannot prepare the saves folder {}: {error}",
+                    folders.saves.display()
+                ));
+            }
+        }
+
+        let picture = settings.picture(screen);
+        out.log.line(&format!("picture: {}", picture.describe()));
+        let plan = plan::plan(&picture, &folders.runtime, &folders.saves, wine);
+        install_components(out, &plan, &game_dir, &folders.runtime, &components_dir)?;
+        write_registry(out, &plan)?;
+        if !plan.app_dll_overrides.is_empty() {
+            let applied = wine::app_dll_overrides(edition::GAME_EXE, &APP_OVERRIDES)
+                .map_err(|error| error.to_string())?;
+            out.log
+                .line(&format!("Wine DLL overrides for cmr5.exe: {applied:?}"));
+        }
+        out.log.line(&format!("arguments: {:?}", plan.args));
+
+        let exe = folders.runtime.join(edition::GAME_EXE);
+        if plan.prefer_fast_gpu {
             match gpu::prefer_fast_gpu(&exe) {
                 Ok(true) => out.log.line("Windows: high-performance GPU preferred"),
                 Ok(false) => {}
                 Err(error) => out.warn(&error.to_string()),
             }
         }
-        let code = Launch::new(&exe).cwd(&runtime_dir).run()?;
+        let mut launch = Launch::new(&exe)
+            .cwd(&folders.runtime)
+            .args(plan.args.iter().copied());
+        for (name, value) in &plan.env {
+            launch = launch.env(*name, *value);
+        }
+        out.log.line("starting the game");
+        let game_process = launch.spawn()?;
+        let hook_dll = components_dir.join(components::CLOSE_HOOK_DLL);
+        let _hook = match game_process.message_hook(&hook_dll, c"close_hook") {
+            Ok(hook) => Some(hook),
+            Err(error) => {
+                out.warn(&format!("close hook not installed: {error}"));
+                None
+            }
+        };
+        let code = game_process.wait()?;
         out.log.line(&format!("game exited with {code}"));
         Ok(code as i32)
+    }
+
+    /// Unpacks GOG's installer with the bundled innoextract, once.
+    fn unpack(
+        out: &Out,
+        installer: &source::Installer,
+        dest: &Path,
+        components_dir: &Path,
+    ) -> Result<(), String> {
+        if source::is_unpacked(dest, installer) {
+            return Ok(());
+        }
+        let parent = dest.parent().unwrap_or(dest);
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Cannot create {}: {error}", parent.display()))?;
+        if let Some(free) = disk::free_space(parent)
+            && free < source::UNPACK_BYTES
+        {
+            return Err(format!(
+                "Unpacking the game needs about {} GB free in {}; there are {:.1} GB.",
+                source::UNPACK_BYTES / 1_000_000_000,
+                parent.display(),
+                free as f64 / 1e9
+            ));
+        }
+        let innoextract = components_dir.join(components::INNOEXTRACT);
+        out.log.line(&format!(
+            "unpacking {} into {} (a few minutes)",
+            installer.setup.display(),
+            dest.display()
+        ));
+        let found = source::unpack(installer, dest, |args| {
+            let code = Launch::new(&innoextract)
+                .args(args.iter().map(String::as_str))
+                .hidden(true)
+                .run()?;
+            if code == 0 {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Unpacking the game from {} failed (innoextract exit code {code}).",
+                    installer.setup.display()
+                ))
+            }
+        })?;
+        out.log.line(&format!(
+            "unpacked: {} ({})",
+            found.exe.display(),
+            found.edition.name
+        ));
+        Ok(())
+    }
+
+    /// DXVK in or out through the ledger (a player's own `d3d9.dll`
+    /// stays), and the generated files.
+    fn install_components(
+        out: &Out,
+        plan: &plan::Plan,
+        game: &Path,
+        runtime_dir: &Path,
+        components_dir: &Path,
+    ) -> Result<(), String> {
+        let failed =
+            |error: std::io::Error| format!("Cannot set up {}: {error}", runtime_dir.display());
+        let mut ledger = Ledger::load(game, runtime_dir, components::LEDGER);
+        for name in &plan.installed {
+            let bytes = std::fs::read(components_dir.join(name)).map_err(failed)?;
+            match ledger.install(name, &bytes, &[]).map_err(failed)? {
+                Outcome::NotOurs => out.warn(&format!(
+                    "{name} in the private copy is not the launcher's; it was kept"
+                )),
+                outcome => out.log.line(&format!("component {name}: {outcome:?}")),
+            }
+        }
+        for name in &plan.taken_out {
+            let outcome = ledger.take_out(name, &[]).map_err(failed)?;
+            if outcome != Outcome::Absent {
+                out.log
+                    .line(&format!("component {name} taken out: {outcome:?}"));
+            }
+        }
+        for (name, contents) in &plan.files {
+            let file = runtime_dir.join(name);
+            match contents {
+                Some(text) => fsx::write_atomic(&file, text).map_err(failed)?,
+                None if file.is_file() => fsx::remove(&file).map_err(failed)?,
+                None => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// The game's registry values: HKLM (32-bit view), or the per-user
+    /// VirtualStore when HKLM can't be written.
+    fn write_registry(out: &Out, plan: &plan::Plan) -> Result<(), String> {
+        let (key, place) = Key::machine_or_virtual_store(registry::KEY)
+            .map_err(|error| format!("Cannot open the game's registry key: {error}"))?;
+        for write in &plan.registry {
+            match &write.value {
+                RegValue::String(text) => key.set_string(write.name, text),
+                RegValue::Dword(n) => key.set_dword(write.name, *n),
+            }
+            .map_err(|error| format!("Cannot write the game's registry: {error}"))?;
+        }
+        out.log.line(&format!(
+            "registry ({}): {}",
+            place.describe(),
+            plan.registry
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
+        Ok(())
     }
 }

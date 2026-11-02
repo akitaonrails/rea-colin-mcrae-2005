@@ -63,6 +63,7 @@ impl Form {
         let settings = self.settings();
         let current = Picture {
             resolution: settings.resolution,
+            fps_limit: settings.fps_limit,
             vsync: settings.vsync,
         };
         if let Some(look) = settings.look
@@ -140,7 +141,7 @@ mod tests {
         assert_eq!(form.look(), Some(Look::SteamDeck));
         assert_eq!(
             form.settings().picture(None).resolution,
-            Some(Resolution::Size(1280, 800))
+            Some(Resolution::Size(1280, 720))
         );
         form.picture_edited(None);
         assert_eq!(

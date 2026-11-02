@@ -2,11 +2,11 @@
 //!
 //! The player's folder is only read. The launcher brings its files into a
 //! runtime folder of its own and changes only that copy: every write there
-//! is a whole-file swap (`rea_launcher::fsx`). [`GamePolicy`] says which
-//! files are large read-only data (hard-linked when the disk allows),
-//! which the game writes itself (never overwritten once present: saves,
-//! its own settings) and which the launcher places (components, generated
-//! configuration). Fill it in from Phase 2 of the playbook.
+//! is a whole-file swap (`rea_launcher::fsx`). The registry sends the game
+//! here (`INSTALL_PATH`) and its saves to a folder of their own
+//! (`SAVEGAME_PATH`, see [`crate::saves`]), so the game writes nothing in
+//! the runtime (docs/RUNTIME_NOTES.md, run r11: only `SG\OPTIONS` and
+//! `SG\BESTTIMES_GHOSTS` were written, and those go to the saves folder).
 
 use std::io;
 use std::path::Path;
@@ -17,25 +17,35 @@ use rea_launcher::runtime::{self, Policy, Stamp, SyncReport};
 /// The runtime's record of what it brought over.
 pub const MANIFEST: &str = ".cmr2005-manifest";
 
+/// The launcher's generated DXVK settings ([`crate::components`]).
+pub const DXVK_CONF: &str = "dxvk.conf";
+
 /// What Colin McRae Rally 2005 does with its files.
 pub struct GamePolicy;
 
+fn top(rel: &str) -> String {
+    rel.split('/')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+}
+
 impl Policy for GamePolicy {
-    /// Static data the game only reads (never anything it opens for
-    /// writing). Nothing yet: everything is copied.
-    fn link(&self, _rel: &str) -> bool {
-        false
+    /// The 3.4 GB of tracks, cars, videos and fonts the game only reads:
+    /// hard-linked when the disk allows, so the copy takes no extra space.
+    fn link(&self, rel: &str) -> bool {
+        matches!(top(rel).as_str(), "data" | "fonts")
     }
 
-    /// Files the game writes: saves, its own settings. Copied once, then
-    /// left as the game keeps them. Nothing known yet.
-    fn game_written(&self, _rel: &str, _source: Stamp) -> bool {
-        false
+    /// The save folder of an installed game (`SG`), and DLLs a player
+    /// added (a DSOAL `dsound.dll`): copied once, then kept as they are.
+    fn game_written(&self, rel: &str, _source: Stamp) -> bool {
+        top(rel) == "sg" || rel.to_ascii_lowercase().ends_with(".dll") && !rel.contains('/')
     }
 
-    /// Files the launcher places itself. Nothing yet.
-    fn owned(&self, _rel: &str, _source: Stamp) -> bool {
-        false
+    /// The launcher's own `dxvk.conf`: never taken from the game folder.
+    fn owned(&self, rel: &str, _source: Stamp) -> bool {
+        rel.eq_ignore_ascii_case(DXVK_CONF)
     }
 }
 
@@ -53,6 +63,21 @@ fn sync(game: &Path, runtime: &Path) -> io::Result<SyncReport> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn data_is_linked_and_player_files_are_kept() {
+        let stamp = Stamp { size: 1, mtime: 1 };
+        assert!(GamePolicy.link("data/Tracks/aus/track.big"));
+        assert!(GamePolicy.link("Fonts/HelNu_10.dds"));
+        assert!(!GamePolicy.link("cmr5.exe"));
+        assert!(!GamePolicy.link("MathCPU.dll"));
+        assert!(GamePolicy.game_written("SG/OPTIONS", stamp));
+        assert!(GamePolicy.game_written("dsound.dll", stamp));
+        assert!(!GamePolicy.game_written("data/x.dll", stamp));
+        assert!(!GamePolicy.game_written("cmr5.exe", stamp));
+        assert!(GamePolicy.owned("DXVK.conf", stamp));
+        assert!(!GamePolicy.owned("readme.txt", stamp));
+    }
 
     #[test]
     fn the_game_is_copied_and_never_changed() {

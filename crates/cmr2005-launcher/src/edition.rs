@@ -27,16 +27,14 @@ pub struct Edition {
     pub name: &'static str,
 }
 
-/// Every known build of [`GAME_EXE`]. Empty until Phase 2 records the
-/// owner's editions, so every build is refused for now. A row looks like:
-///
-/// ```text
-/// Known::new(
-///     "<64 hex digits: sha256sum of the exe>",
-///     Edition { name: "PC v1.1 (retail)" },
-/// ),
-/// ```
-pub static EDITIONS: &[Known<Edition>] = &[];
+/// Every known build of [`GAME_EXE`] (docs/RESEARCH.md, "The build we
+/// have"). The retail DVDs carry StarForce and are not in the table.
+pub static EDITIONS: &[Known<Edition>] = &[Known::new(
+    "a7ea2d33337d764e541b0871a5b0ce5a91c2e66c94c8459e811823054fb113bc",
+    Edition {
+        name: "PC v1.1 (GOG)",
+    },
+)];
 
 /// The build of these exe bytes, or their digest when it is unknown.
 pub fn identify(bytes: &[u8]) -> Result<&'static Edition, [u8; 32]> {
@@ -99,6 +97,16 @@ mod tests {
                 Ok(&known.value)
             );
         }
+    }
+
+    #[test]
+    fn the_gog_build_is_known() {
+        assert_eq!(EDITIONS.len(), 1);
+        assert_eq!(EDITIONS[0].value.name, "PC v1.1 (GOG)");
+        assert_eq!(
+            identify::hex(&EDITIONS[0].sha256),
+            "a7ea2d33337d764e541b0871a5b0ce5a91c2e66c94c8459e811823054fb113bc"
+        );
     }
 
     #[test]

@@ -275,6 +275,7 @@ name = "cmr2005-launcher"
 version = "0.1.0"
 dependencies = [
  "rea-launcher",
+ "rea-launcher-close-hook",
  "rea-launcher-ui",
  "rea-launcher-win32",
 ]
@@ -1898,6 +1899,14 @@ version = "0.3.3"
 source = "git+https://github.com/akitaonrails/rea-launcher-sdk?tag=v0.3.3#5b6d8f7eef5ec695df6916d037085c4d8df0db3f"
 dependencies = [
  "sha2",
+]
+
+[[package]]
+name = "rea-launcher-close-hook"
+version = "0.3.3"
+source = "git+https://github.com/akitaonrails/rea-launcher-sdk?tag=v0.3.3#5b6d8f7eef5ec695df6916d037085c4d8df0db3f"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
