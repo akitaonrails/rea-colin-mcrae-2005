@@ -139,13 +139,27 @@ an SDK change (`rea-launcher-close-hook`), not done here.
 
 After every run the process table was checked as above; nothing was left.
 
+**Saves:** after e06–e11 the game's `OPTIONS` and `BESTTIMES_GHOSTS` were
+in the launcher's `saves` folder (`SAVEGAME_PATH`), and the runtime copy
+had no `SG` folder.
+
+### 2026-11-02: `linux/cmr2005-play` with the real game
+
+`helper.sh`: `linux/cmr2005-play --play` with `CMR2005_LAUNCHER` = the dev
+package and `CMR2005_PREFIX` = `prefix-e2e2`, gamescope wrapped to
+`--backend headless` on `PATH`, private PipeWire as above.
+
+| Run | Action | Result |
+|---|---|---|
+| h01 | `cmr2005-play stop` with the game running | the helper chose the NVIDIA GPU and 1920×1080; **game and helper gone in 0.28 s**, nothing left |
+| h02 | SIGINT to the helper's process group (Ctrl+C) | **game and helper gone in 0.40 s** (exit 143), nothing left |
+
 ### Not verified yet
 
 - Menu music (WMA) and sound in general (audio went to a null sink).
 - Sound output (it went to the null sink; no errors, nothing measured).
 - Driving a stage (car physics at different frame rates).
-- Saves written to `SAVEGAME_PATH` (pointing at a folder other than `SG`).
 - Controllers.
-- The game's own Quit, the Linux helper's stop and Ctrl+C, gamescope closed.
+- The game's own Quit, gamescope closed by itself.
 - The settings window (only `--no-window` was run).
 - Windows: how the launcher provides the registry values without admin rights.

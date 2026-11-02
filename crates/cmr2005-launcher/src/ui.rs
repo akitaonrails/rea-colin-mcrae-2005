@@ -22,7 +22,7 @@ use rea_launcher_ui::window::Layout;
 use crate::config::{Look, OPTIONS};
 use crate::edition;
 use crate::form::Form;
-use crate::palette::{ACCENT, BASE, ERROR, INK, MUTED, PANEL};
+use crate::palette::{BASE, ERROR, INK, MUTED, PANEL, SEPIA};
 use crate::source::{self, Source};
 
 /// Width of the hero image strip.
@@ -190,8 +190,11 @@ fn draw_hero(ui: &egui::Ui, rect: Rect, hero: Option<&TextureHandle>) {
     }
     widgets::hero_image(painter, rect, hero, Crop::Center, BASE);
     if !HERO_CREDIT.is_empty() {
+        // Small text never sits on the photo itself: a solid band under it.
+        let band = Rect::from_min_max(pos2(rect.left(), rect.bottom() - 34.0), rect.max);
+        painter.rect_filled(band, 0.0, BASE);
         painter.text(
-            pos2(rect.left() + 20.0, rect.bottom() - 20.0),
+            pos2(rect.left() + 14.0, rect.bottom() - 11.0),
             Align2::LEFT_BOTTOM,
             HERO_CREDIT,
             body(11.0),
@@ -236,7 +239,7 @@ fn play_tab(ui: &mut egui::Ui, w: &mut Window) {
             ),
             MUTED,
         ),
-        Check::Found(name) => (format!("Found {name}."), ACCENT),
+        Check::Found(name) => (format!("Found {name}."), SEPIA),
         Check::Problem(problem) => (problem.clone(), ERROR),
     };
     ui.add(egui::Label::new(RichText::new(note).font(body(13.0)).color(color)).selectable(true));
@@ -277,12 +280,16 @@ fn look_note(look: Look, screen: Option<(u32, u32)>) -> String {
         Some(_) => "The game's own size".to_owned(),
         None => "Your current size".to_owned(),
     };
+    let fps = match picture.fps_limit {
+        Some(fps) if fps > 0 => format!(", {fps} fps"),
+        _ => String::new(),
+    };
     let vsync = match picture.vsync {
         Some(true) => ", VSync on.",
         Some(false) => ", VSync off.",
         None => ".",
     };
-    format!("{size}{vsync}")
+    format!("{size}{fps}{vsync}")
 }
 
 /// Every option row that is not on the Play tab and has a window control.

@@ -1,22 +1,29 @@
 //! The settings window's colours and sizes, in the SDK's roles
 //! (`rea_launcher_ui::theme`).
 //!
-//! PLACEHOLDER colours: a neutral charcoal with one amber accent. Choose
-//! the game's own with a design skill (`frontend-design`, then a review
-//! with `web-design-guidelines`) once the window's imagery is picked
-//! (docs/STANDARDS.md "Give the window the game's identity"). The tests
-//! below keep any palette within WCAG AA and the text-size rules.
+//! Colin McRae Rally 2005's own menus: a white band under sepia 3D
+//! backdrops, warm-black condensed headings, brown secondary text, and the
+//! red of the logo's "2005", kept for the one action that starts the game.
+//! The hero photo is toned sepia to match (`ui::HERO_JPEG`). The tests
+//! below keep the palette within WCAG AA and the text-size rules.
 
 use rea_launcher_ui::egui::Color32;
 use rea_launcher_ui::theme::{Metrics, Palette, tint};
 
-pub const BASE: Color32 = Color32::from_rgb(0x15, 0x17, 0x1c);
-pub const PANEL: Color32 = Color32::from_rgb(0x21, 0x25, 0x2c);
-pub const LINE: Color32 = Color32::from_rgb(0x76, 0x7d, 0x89);
-pub const INK: Color32 = Color32::from_rgb(0xf1, 0xf3, 0xf6);
-pub const MUTED: Color32 = Color32::from_rgb(0xaa, 0xb2, 0xbe);
-pub const ACCENT: Color32 = Color32::from_rgb(0xf2, 0xb3, 0x3d);
-pub const ERROR: Color32 = Color32::from_rgb(0xff, 0x8f, 0x80);
+/// The menus' white band.
+pub const BASE: Color32 = Color32::from_rgb(0xfb, 0xfa, 0xf8);
+/// Fields and cards: a pale grey taken toward the backdrops' sepia.
+pub const PANEL: Color32 = Color32::from_rgb(0xec, 0xe7, 0xe2);
+pub const LINE: Color32 = Color32::from_rgb(0x8a, 0x7c, 0x72);
+/// The headings' warm black.
+pub const INK: Color32 = Color32::from_rgb(0x1c, 0x16, 0x12);
+/// The menus' brown subtitles ("Play Stages or Rally.").
+pub const MUTED: Color32 = Color32::from_rgb(0x66, 0x57, 0x4d);
+/// The logo's red.
+pub const ACCENT: Color32 = Color32::from_rgb(0xc4, 0x12, 0x2e);
+/// The backdrops' dark sepia: the chosen look, like the menus' selected item.
+pub const SEPIA: Color32 = Color32::from_rgb(0x3d, 0x2f, 0x26);
+pub const ERROR: Color32 = Color32::from_rgb(0x9e, 0x1b, 0x14);
 
 pub const PALETTE: Palette = Palette {
     base: BASE,
@@ -25,15 +32,15 @@ pub const PALETTE: Palette = Palette {
     ink: INK,
     muted: MUTED,
     action: ACCENT,
-    action_hover: Color32::from_rgb(0xff, 0xc9, 0x5c),
-    on_action: BASE,
-    select: ACCENT,
-    on_select: BASE,
+    action_hover: Color32::from_rgb(0xa3, 0x0d, 0x24),
+    on_action: Color32::WHITE,
+    select: SEPIA,
+    on_select: Color32::WHITE,
     error: ERROR,
-    disabled_ink: Color32::from_rgb(0x6c, 0x73, 0x7e),
-    disabled_line: Color32::from_rgb(0x2e, 0x33, 0x3b),
-    focus: INK,
-    selection: tint(ACCENT, 128),
+    disabled_ink: Color32::from_rgb(0x8f, 0x84, 0x7c),
+    disabled_line: Color32::from_rgb(0xd6, 0xcf, 0xc8),
+    focus: SEPIA,
+    selection: tint(ACCENT, 64),
 };
 
 pub const METRICS: Metrics = Metrics::DEFAULT;
