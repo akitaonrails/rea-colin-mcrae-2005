@@ -25,6 +25,8 @@ pub const SETUP_EXE: &str = "setup_colin2005.exe";
 pub struct InstallerBuild {
     pub name: &'static str,
     pub parts: &'static [(&'static str, u64)],
+    /// The bytes of the unpacked game (`app\`), for the progress bar.
+    pub unpacked: u64,
 }
 
 pub static INSTALLERS: &[Known<InstallerBuild>] = &[Known::new(
@@ -35,6 +37,7 @@ pub static INSTALLERS: &[Known<InstallerBuild>] = &[Known::new(
             ("setup_colin2005-1.bin", 2_097_272_064),
             ("setup_colin2005-2.bin", 985_406_510),
         ],
+        unpacked: 3_564_462_813,
     },
 )];
 
@@ -167,7 +170,8 @@ pub fn innoextract_args(setup: &Path, out: &Path) -> Vec<String> {
 /// Unpacks `installer` into `dest` with `run` (innoextract, called with
 /// [`innoextract_args`]), unless it is there already. The game is checked
 /// (a known `cmr5.exe`) before it takes `dest`'s place; a `dest` without
-/// the [`MARKER`] is never removed.
+/// the [`MARKER`] is never removed. The launcher drives the same steps
+/// itself ([`begin`], [`unpacked_so_far`], [`finish`]) to show progress.
 pub fn unpack(
     installer: &Installer,
     dest: &Path,
@@ -182,8 +186,28 @@ fn unpack_checked(
     run: impl FnOnce(&[String]) -> Result<(), String>,
     check: impl Fn(&Path) -> Result<Found, String>,
 ) -> Result<Found, String> {
+    match begin(installer, dest)? {
+        Begin::Done => check(dest),
+        Begin::Run { args, .. } => {
+            run(&args)?;
+            finish_checked(installer, dest, check)
+        }
+    }
+}
+
+/// What an unpack needs to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Begin {
+    /// `dest` already holds this installer's game.
+    Done,
+    /// Run innoextract with `args`; it writes into `work`.
+    Run { args: Vec<String>, work: PathBuf },
+}
+
+/// Checks `dest` and makes an empty work folder beside it.
+pub fn begin(installer: &Installer, dest: &Path) -> Result<Begin, String> {
     if is_unpacked(dest, installer) {
-        return check(dest);
+        return Ok(Begin::Done);
     }
     if dest.exists() && !dest.join(MARKER).is_file() {
         return Err(format!(
@@ -195,17 +219,64 @@ fn unpack_checked(
     let work = work_dir(dest);
     remove_dir(&work).map_err(|error| cannot(&work, error))?;
     fs::create_dir_all(&work).map_err(|error| cannot(&work, error))?;
-    run(&innoextract_args(&installer.setup, &work))?;
+    Ok(Begin::Run {
+        args: innoextract_args(&installer.setup, &work),
+        work,
+    })
+}
+
+/// The bytes innoextract has written into `work` so far (files that
+/// vanish while the folder is read count as nothing).
+pub fn unpacked_so_far(work: &Path) -> u64 {
+    let mut total = 0;
+    let mut dirs = vec![work.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            match entry.file_type() {
+                Ok(kind) if kind.is_dir() => dirs.push(entry.path()),
+                Ok(kind) if kind.is_file() => {
+                    total += entry.metadata().map_or(0, |m| m.len());
+                }
+                _ => {}
+            }
+        }
+    }
+    total
+}
+
+/// After innoextract succeeded: checks the game and moves it to `dest`.
+pub fn finish(installer: &Installer, dest: &Path) -> Result<Found, String> {
+    finish_checked(installer, dest, edition::find)
+}
+
+fn finish_checked(
+    installer: &Installer,
+    dest: &Path,
+    check: impl Fn(&Path) -> Result<Found, String>,
+) -> Result<Found, String> {
+    let work = work_dir(dest);
     let app = paths::find_ignoring_case(&work, "app")
         .filter(|p| p.is_dir())
         .ok_or_else(|| format!("The installer gave no game files in {}.", work.display()))?;
-    check(&app)?;
+    if let Err(error) = check(&app) {
+        let _ = remove_dir(&work);
+        return Err(error);
+    }
     fs::write(app.join(MARKER), identify::hex(&installer.sha256))
         .map_err(|error| cannot(&app, error))?;
     remove_dir(dest).map_err(|error| cannot(dest, error))?;
     fs::rename(&app, dest).map_err(|error| cannot(dest, error))?;
     remove_dir(&work).map_err(|error| cannot(&work, error))?;
     check(dest)
+}
+
+/// A stopped or failed unpack: its work folder goes, `dest` is untouched.
+pub fn abandon(dest: &Path) -> Result<(), String> {
+    let work = work_dir(dest);
+    remove_dir(&work).map_err(|error| cannot(&work, error))
 }
 
 fn remove_dir(dir: &Path) -> io::Result<()> {
@@ -240,6 +311,7 @@ mod tests {
         static BUILD: InstallerBuild = InstallerBuild {
             name: "test installer",
             parts: &[("setup_colin2005-1.bin", 10), ("setup_colin2005-2.bin", 3)],
+            unpacked: 8,
         };
         for (name, size) in BUILD.parts {
             fs::File::create(dir.join(name))
@@ -379,6 +451,7 @@ mod tests {
         value: InstallerBuild {
             name: "fake",
             parts: &[("setup_colin2005-1.bin", 10), ("setup_colin2005-2.bin", 3)],
+            unpacked: 8,
         },
     }];
 
@@ -432,6 +505,28 @@ mod tests {
             exe,
             edition: &edition::EDITIONS[0].value,
         })
+    }
+
+    #[test]
+    fn progress_counts_the_bytes_written_so_far_and_a_stop_leaves_nothing() {
+        let root = temp("progress");
+        let installer = fake_installer(&root);
+        let dest = root.join("game");
+        let Begin::Run { args, work } = begin(&installer, &dest).unwrap() else {
+            panic!("nothing unpacked yet");
+        };
+        assert_eq!(args[8], work.display().to_string());
+        assert_eq!(unpacked_so_far(&work), 0);
+        fs::create_dir_all(work.join("app/data/deep")).unwrap();
+        fs::write(work.join("app/cmr5.exe"), b"1234").unwrap();
+        fs::write(work.join("app/data/deep/a.big"), b"123456").unwrap();
+        assert_eq!(unpacked_so_far(&work), 10);
+        assert_eq!(unpacked_so_far(&root.join("missing")), 0);
+        // The player stops it: the work folder goes, no game is left behind.
+        abandon(&dest).unwrap();
+        assert!(!work.exists() && !dest.exists());
+        abandon(&dest).unwrap();
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
