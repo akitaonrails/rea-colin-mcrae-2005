@@ -112,11 +112,40 @@ before r11).
 innoextract 1.9's Windows build unpacked the owner's installer under Wine
 11.21 in 162 s (from the NAS), byte-identical to the Linux innoextract's output.
 
+### 2026-11-02: the launcher end to end (package from `packaging/package.sh --no-appimage`)
+
+`CMR2005Launcher.exe --no-window` from `.work/pkg/CMR2005Launcher-dev`
+(release i686 build, DXVK 3.1.1 `d3d9.dll`, innoextract 1.9, the SDK's
+close hook), plain `wine` 11.21 inside a headless gamescope 1920×1080,
+throwaway prefixes `.work/realgame/prefix-e2e*`; harness `bin/launch.sh`.
+
+| Run | What | Result |
+|---|---|---|
+| e01 | `--game` = the owner's GOG installer folder (NAS), fresh prefix | **unpacked** (GOG installer identified, then `PC v1.1 (GOG)`), runtime 5219 files (5207 hard-linked), registry written (HKLM 32-bit view), DXVK + per-program `d3d9` override, `WIDESCREENDISPLAY`; but the screen read 1024×768 and the game quit after 1 s (see e05) |
+| e02–e04 | same prefix | the game runs (intro videos); 1920×1080 and 1024×576 both kept by the game |
+| e05 | fresh prefix made by a headless `wineboot` | screen 1024×768 and **no 1024×576 mode listed: the game quits at once with code 0**. My harness had made the prefix with no display; the Linux helper never does. The launcher now falls back to a listed mode (`config::fit_mode`) and logs it |
+| e06 | fresh prefix made inside gamescope, `--game` = an installed folder | screen 1920×1080, the stage at 1920×1080 widescreen; first start fine |
+| e07 | close hook | `rea_close_hook.dll` mapped into `cmr5.exe` |
+| e08 | `WM_SYSCOMMAND SC_CLOSE` posted to `PC_CMR5` (window on the main thread) | **game and launcher gone** |
+| e11 | `WM_DELETE_WINDOW` (compositor close, as Super+W) | **game and launcher gone** |
+| e06, e09 | Alt+F4 as keys (XTest, and `SendInput` from inside Wine) | **not seen by the game**: still running |
+
+**Inference (not verified):** the game takes the keyboard through
+DirectInput in exclusive mode, which keeps Alt+F4 from its window, so the
+hook never sees the keys. On desktops where Alt+F4 is the compositor's
+close (most Linux desktops, Hyprland's binding) it works as e11 shows. A
+close hook that also polls the key state would cover the keys everywhere:
+an SDK change (`rea-launcher-close-hook`), not done here.
+
+After every run the process table was checked as above; nothing was left.
+
 ### Not verified yet
 
 - Menu music (WMA) and sound in general (audio went to a null sink).
 - Sound output (it went to the null sink; no errors, nothing measured).
 - Driving a stage (car physics at different frame rates).
 - Saves written to `SAVEGAME_PATH` (pointing at a folder other than `SG`).
-- Controllers. The close hook with `PC_CMR5` (the launcher is not run yet).
+- Controllers.
+- The game's own Quit, the Linux helper's stop and Ctrl+C, gamescope closed.
+- The settings window (only `--no-window` was run).
 - Windows: how the launcher provides the registry values without admin rights.

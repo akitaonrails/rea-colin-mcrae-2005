@@ -221,6 +221,35 @@ impl Picture {
     }
 }
 
+/// Common 16:9 sizes, largest first, for [`fit_mode`].
+const SIZES_16_9: [(u32, u32); 8] = [
+    (3840, 2160),
+    (3200, 1800),
+    (2560, 1440),
+    (1920, 1080),
+    (1600, 900),
+    (1366, 768),
+    (1280, 720),
+    (1024, 576),
+];
+
+/// The mode the game can use for `wanted`: the game quits at once when the
+/// display lists no such mode (docs/RUNTIME_NOTES.md, run e05). `wanted`
+/// when `listed`; else, for a 16:9 size, the largest listed 16:9 size no
+/// bigger; else `None`, keeping the game's own mode.
+pub fn fit_mode(wanted: (u32, u32), listed: impl Fn(u32, u32) -> bool) -> Option<(u32, u32)> {
+    if listed(wanted.0, wanted.1) {
+        return Some(wanted);
+    }
+    if !display::is_16_9(wanted) {
+        return None;
+    }
+    SIZES_16_9
+        .into_iter()
+        .filter(|&(w, h)| w <= wanted.0 && h <= wanted.1)
+        .find(|&(w, h)| listed(w, h))
+}
+
 /// The settings from `launcher.cfg` and the command line. `None` is unset.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
@@ -393,6 +422,25 @@ mod tests {
         assert_eq!(size(Some((1920, 1200))), Some(Resolution::Size(1920, 1080)));
         assert_eq!(size(Some((1080, 1920))), Some(Resolution::Size(1920, 1080)));
         assert_eq!(size(None), Some(Resolution::Size(1920, 1080)));
+    }
+
+    #[test]
+    fn a_mode_the_display_lacks_falls_back_to_a_listed_one() {
+        let listed = |w, h| matches!((w, h), (1920, 1080) | (1280, 720) | (1024, 768));
+        assert_eq!(fit_mode((1920, 1080), listed), Some((1920, 1080)));
+        assert_eq!(fit_mode((2560, 1440), listed), Some((1920, 1080)));
+        assert_eq!(fit_mode((1600, 900), listed), Some((1280, 720)));
+        assert_eq!(
+            fit_mode((1024, 576), listed),
+            None,
+            "nothing smaller is listed"
+        );
+        assert_eq!(
+            fit_mode((1280, 800), listed),
+            None,
+            "not 16:9: the game's own"
+        );
+        assert_eq!(fit_mode((1024, 768), listed), Some((1024, 768)));
     }
 
     #[test]

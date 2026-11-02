@@ -11,3 +11,12 @@ linux/cmr2005-play x
 linux/rea-play.sh
 linux/README.md
 licenses/Barlow-OFL.txt
+licenses/DXVK-LICENSE.txt
+licenses/innoextract/innoextract.LICENSE.txt
+licenses/innoextract/Boost.LICENSE_1_0.txt
+licenses/innoextract/liblzma.COPYING.txt
+licenses/innoextract/libstdc++.COPYING3.txt
+licenses/innoextract/libstdc++.COPYING.RUNTIME.txt
+components/d3d9.dll
+components/innoextract.exe
+components/rea_close_hook.dll

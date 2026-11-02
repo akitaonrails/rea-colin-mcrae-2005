@@ -238,8 +238,24 @@ mod app {
             }
         }
 
-        let picture = settings.picture(screen);
-        out.log.line(&format!("picture: {}", picture.describe()));
+        let mut picture = settings.picture(screen);
+        out.log.line(&format!(
+            "screen: {}; picture: {}",
+            screen.map_or("unknown".to_owned(), |(w, h)| format!("{w}x{h}")),
+            picture.describe()
+        ));
+        if let Some((w, h)) = picture.size() {
+            let fitted = config::fit_mode((w, h), display::mode_supported);
+            if fitted != Some((w, h)) {
+                out.warn(&format!(
+                    "the display lists no {w}x{h} mode; the game gets {}",
+                    fitted.map_or("its own mode".to_owned(), |(w, h)| format!("{w}x{h}"))
+                ));
+                picture.resolution = Some(fitted.map_or(cfg::Resolution::Original, |(w, h)| {
+                    cfg::Resolution::Size(w, h)
+                }));
+            }
+        }
         let plan = plan::plan(&picture, &folders.runtime, &folders.saves, wine);
         install_components(out, &plan, &game_dir, &folders.runtime, &components_dir)?;
         write_registry(out, &plan)?;

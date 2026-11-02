@@ -31,12 +31,34 @@ cp "$ROOT/sdk/rea-play.sh" "$pkg/linux/rea-play.sh"
 chmod +x "$pkg/linux/cmr2005-play"
 cp "$ROOT"/packaging/licenses/* "$pkg/licenses/"
 
-# Third-party components: fetch each from packaging/third-party.txt
-# (checked by SHA-256) and unpack what the game needs, e.g.
-#   . "$ROOT/sdk/packaging/pins.sh"
-#   PIN_FILE=$ROOT/packaging/third-party.txt
-#   zip=$(pin_fetch dxvk "$work")
-# and list every file in package.allow and THIRD_PARTY.md.
+# Third-party components from packaging/third-party.txt, each checked by
+# SHA-256 (the archive, then the one file taken out of it).
+. "$ROOT/sdk/packaging/pins.sh"
+PIN_FILE=$ROOT/packaging/third-party.txt
+[ -n "${REA_CACHE:-}" ] && PIN_CACHE=$REA_CACHE/pins
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+mkdir -p "$pkg/components" "$pkg/licenses/innoextract"
+
+tarball=$(pin_fetch dxvk "$work")
+tar -xzf "$tarball" -C "$work" dxvk-3.1.1/x32/d3d9.dll
+pin_verify "$work/dxvk-3.1.1/x32/d3d9.dll" "$(pin_sha dxvk-d3d9)"
+cp "$work/dxvk-3.1.1/x32/d3d9.dll" "$pkg/components/d3d9.dll"
+
+zip=$(pin_fetch innoextract "$work")
+unzip -q "$zip" innoextract.exe 'license/*' -d "$work/innoextract"
+pin_verify "$work/innoextract/innoextract.exe" "$(pin_sha innoextract-exe)"
+cp "$work/innoextract/innoextract.exe" "$pkg/components/innoextract.exe"
+cp "$work/innoextract/license/"*.txt "$pkg/licenses/innoextract/"
+
+# The SDK's close hook, built from the pinned SDK (a dependency, not a
+# workspace member; CI builds it next to the launcher).
+hook=$release/rea_close_hook.dll
+if [ ! -f "$hook" ]; then
+  (cd "$ROOT" && cargo build --release --locked --target i686-pc-windows-gnu -p rea-launcher-close-hook)
+  hook=$ROOT/target/i686-pc-windows-gnu/release/rea_close_hook.dll
+fi
+cp "$hook" "$pkg/components/rea_close_hook.dll"
 
 (cd "$dist" && rm -f "$name.zip" && zip -qr "$name.zip" "$name")
 

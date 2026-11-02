@@ -28,5 +28,9 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
   `cmr5.exe`'s per-program DLL override.
 - Saves live in their own folder; saves already in an installed game's
   `SG` folder are copied there once.
-- Alt+F4 and window close end the game (the SDK's close hook, `PC_CMR5`).
+- Closing the game's window ends the game (the SDK's close hook,
+  `PC_CMR5`): the window's close button, the compositor's close (Super+W,
+  a desktop's Alt+F4 binding). The game itself ignores these.
+- A screen mode the display does not list is replaced by the nearest
+  listed 16:9 mode (the game quits at once otherwise).
 - One launcher at a time.
