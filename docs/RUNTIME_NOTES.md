@@ -177,12 +177,27 @@ opened the window. Fixed: after writing the value the launcher starts
 itself again (single-instance lock released first). Checked in a fresh
 headless prefix (w06): the log shows the restart and the window opens.
 
+### 2026-11-02: the owner plays (Hyprland, RTX 5090, through gamescope)
+
+- First AppImage start without gamescope on the host: after the unpack the
+  game stopped with "GraphicsSS_SetupRender Adapter has no modes!". The
+  primary monitor is portrait (the launcher saw 2160×3840); the game only
+  enumerates the primary adapter. Through `cmr2005-play` with the gaming
+  box's gamescope it ran. A Wine virtual desktop
+  (`explorer /desktop=…`) is the candidate fix outside gamescope; the
+  per-program `AppDefaults\cmr5.exe\Explorer\Desktop` key is ignored by
+  Wine 11 (run r18: the game still opened its own X windows). Not done yet.
+- **Played a full Finland stage at 4K** (resolution changed in the game's
+  graphics menu) with a gamepad set up in the game's own controller menu.
+  Recorded (showcase video in the README).
+- **Reported:** about four or five freezes of roughly half a second during
+  the stage; otherwise smooth at about 60 fps. Under investigation.
+
 ### Not verified yet
 
 - Menu music (WMA) and sound in general (audio went to a null sink).
 - Sound output (it went to the null sink; no errors, nothing measured).
 - Driving a stage (car physics at different frame rates).
-- Controllers.
 - The game's own Quit, gamescope closed by itself.
 - The settings window (only `--no-window` was run).
 - Windows: how the launcher provides the registry values without admin rights.

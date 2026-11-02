@@ -19,6 +19,7 @@ Every component below is fetched from a pinned URL and checked by SHA-256
 |---|---|---|---|
 | `crates/cmr2005-launcher/assets/hero.jpg`: Colin McRae, Škoda Fabia WRC, Wales Rally GB 2005 (Millennium Stadium stage), cropped and toned sepia for the window; credited in the window | KevBow (Flickr `kevinbowman`) | CC BY 2.0 (confirmed by Commons' Flickr review on 2007-09-16; the Flickr page now says All Rights Reserved, but a CC licence can't be withdrawn) | https://commons.wikimedia.org/wiki/File:Colin_McRae.jpg |
 | `docs/images/launcher-*.jpg` | the settings window (our UI, with the photo above) | MIT OR Apache-2.0 (the photo: as above) | this repository |
+| Showcase video and poster (hosted at `new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-2005/`, linked from the README, not in the repository) | gameplay recorded by the project owner | game imagery © Codemasters | the project owner |
 | `docs/images/gameplay.jpg` | a screenshot of Colin McRae Rally 2005 running through the launcher | game imagery © Codemasters; captured to show the launcher at work | this repository |
 
 ## Owner decisions

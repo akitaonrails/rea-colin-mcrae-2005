@@ -11,13 +11,14 @@ This project contains no game files: you need your own copy of the game.
 
 > Played end to end on Linux with the AppImage and with Wine 11 inside
 > gamescope: unpacking the GOG installer, the intro videos, the menus and
-> a stage, every look, quitting by closing the window. Not tested yet:
-> Windows itself, the Steam Deck, Proton, controllers, and sound beyond
-> "no errors". Reports are welcome:
+> a stage, every look, quitting by closing the window, a gamepad set up in
+> the game's menu. Not tested yet: Windows itself, the Steam Deck and
+> Proton. Reports are welcome:
 > [open an issue](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=bug-report.yml).
 
-<!-- Showcase video: a poster image linked to the video, both hosted outside
-the repository. Caption: what is shown, on which platform, length. -->
+[![A Finland stage in the Subaru Impreza, played at 4K on Linux through the launcher](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-2005/showcase-poster.jpg)](https://new-uploads-akitaonrails.s3.us-east-2.amazonaws.com/2026/11/02/colin-mcrae-rally-2005/showcase-h264.mp4)
+
+*From the launcher to a Finland stage in the Impreza, at 4K on Linux with a gamepad. Click to watch (3:03, with sound).*
 
 ## Problems this launcher solves
 
@@ -119,6 +120,12 @@ From the installer files, the first start unpacks the game, about 3.4 GB.
 It took about three minutes in testing and nothing shows on screen
 meanwhile. After that, starts are quick.
 
+Then set up the game itself in its own **Options** menu: the graphics
+detail and effects, and your gamepad (see **Gamepad** below). The
+resolution is the one exception: the launcher sets it on every start from
+your look (or the Picture tab), so change it in the launcher. To keep the
+resolution you pick in the game, choose the **Original** look.
+
 ## The settings window
 
 **Play** holds the game folder and the looks. **Picture** holds the
@@ -136,6 +143,13 @@ The game's widescreen view is only correct at 16:9 sizes. Other shapes
 
 The window works with the keyboard alone: Tab moves, Enter or Space
 activates, Enter plays. A control that can't be used says why.
+
+## Gamepad
+
+The launcher adds nothing for pads: the game reads them itself. Set yours
+up once in the game's **Options**, in its controller settings: choose the
+pad, then the buttons and the steering and pedal axes. A gamepad
+was set up this way and played a full stage on Linux.
 
 ## Options
 
@@ -206,6 +220,10 @@ user, and the game reads them from there.
 - **Alt+F4 does nothing in the game:** the keys never reach the game's
   window (it seems to keep the keyboard to itself). Close the window
   instead, or quit from the game's menu.
+- **"Adapter has no modes" when the game starts:** your main monitor is
+  in portrait. The game only looks at the main monitor. On Linux, play
+  through gamescope (the AppImage and `cmr2005-play` use it when it is
+  installed), or make a landscape monitor the main one.
 - **Anything else:** run `CMR2005Launcher.exe --check`, then open an issue
   with the [bug form](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=bug-report.yml)
   and attach `launcher.log` (remove personal paths). Never attach game files.
@@ -219,8 +237,9 @@ user, and the game reads them from there.
   the game keeps its own behaviour.
 - No progress is shown while the installer unpacks (a few minutes).
 - Online play used GameSpy, which is gone.
-- Not tested yet: Windows 10/11, the Steam Deck, Proton, controllers,
-  multi-monitor setups, and driving physics at high frame rates. See
+- Not tested yet: Windows 10/11, the Steam Deck, Proton, and multi-monitor
+  setups outside gamescope (a portrait main monitor stops the game, see
+  Troubleshooting). See
   [docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md).
 
 ## Uninstall
