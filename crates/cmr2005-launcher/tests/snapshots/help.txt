@@ -1,0 +1,20 @@
+CMR2005Launcher.exe <version>: plays your own copy of Colin McRae Rally 2005 on modern Windows and Linux.
+
+Usage: CMR2005Launcher.exe [options]
+
+Without options the settings window opens; Play saves them and starts the game.
+
+Options (each is also a launcher.cfg key):
+  --game <folder>                        Game folder
+  --look original|widescreen|steam_deck  Look
+  --resolution <WxH>                     Resolution
+  --fps-limit <0-1000>                   Frame-rate cap
+  --vsync on|off                         VSync
+  --runtime <folder>                     Private copy folder
+
+Launcher switches:
+  --settings   only the settings window (exit 0 after Play, 3 when closed)
+  --no-window  play with the saved settings and these options, no window
+  --check      check the game folder and its edition, then exit (see launcher.log)
+  --linux      started by the Linux helper (linux/cmr2005-play)
+  --help       this text

@@ -317,6 +317,8 @@ the editions, the registry fix, the installer unpacking, the looks.
   AppImage tools, in the AppImage.
 - [Barlow](https://github.com/jpt/barlow) by Jeremy Tribby (SIL OFL): the
   window's type.
+- KevBow's [photo of Colin McRae at Wales Rally GB 2005](https://commons.wikimedia.org/wiki/File:Colin_McRae.jpg)
+  (CC BY 2.0): the window's picture.
 - [PCGamingWiki](https://www.pcgamingwiki.com/wiki/Colin_McRae_Rally_2005),
   the [WineHQ AppDB](https://appdb.winehq.org/objectManager.php?sClass=version&iId=6421)
   and [Wine bug 38198](https://bugs.winehq.org/show_bug.cgi?id=38198), where

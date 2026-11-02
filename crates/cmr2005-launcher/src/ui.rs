@@ -28,18 +28,13 @@ use crate::source::{self, Source};
 /// Width of the hero image strip.
 pub const PHOTO_W: f32 = 280.0;
 
-/// The hero image (JPEG, a few hundred KB at most). Empty slot for now:
-/// research imagery per docs/STANDARDS.md ("Give the window the game's
-/// identity": freely licensed photos of the real subject first, official
-/// art only with the owner's recorded decision, else an original
-/// illustration; never anything taken out of the game's files). Then put
-/// it in `assets/` and set `Some(include_bytes!("../assets/hero.jpg"))`,
-/// record it in THIRD_PARTY.md and fill [`HERO_CREDIT`].
-pub const HERO_JPEG: Option<&[u8]> = None;
+/// The hero image: Colin McRae's Škoda Fabia WRC at Wales Rally GB 2005,
+/// photo by KevBow (CC BY 2.0, via Wikimedia Commons), cropped to the
+/// strip and toned sepia like the game's menu backdrops (THIRD_PARTY.md).
+pub const HERO_JPEG: Option<&[u8]> = Some(include_bytes!("../assets/hero.jpg"));
 
-/// The image's credit (author, licence), shown under it when the licence
-/// asks for attribution.
-pub const HERO_CREDIT: &str = "";
+/// The image's credit, which its licence asks for.
+pub const HERO_CREDIT: &str = "Photo: KevBow, CC BY 2.0 (Wikimedia Commons)";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tab {
@@ -365,6 +360,7 @@ mod app {
             options,
             Box::new(|cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
+                crate::palette::light_widgets(&cc.egui_ctx);
                 let mut window = Window::new(&text, screen);
                 window.linux = linux;
                 window.pick = || {
@@ -446,12 +442,14 @@ mod tests {
     use rea_launcher_ui::testing::{self, Harness, Queryable};
 
     fn open(text: &str) -> Harness<'static, Window> {
-        testing::harness(
+        let ui = testing::harness(
             &PALETTE,
             &METRICS,
             Window::new(text, Some((1920, 1080))),
             draw,
-        )
+        );
+        crate::palette::light_widgets(&ui.ctx);
+        ui
     }
 
     fn flags(args: &[&str]) -> Settings {
@@ -482,6 +480,91 @@ mod tests {
             Some(Resolution::Size(1280, 720))
         );
         assert!(testing::checked(&ui.get_by_label("Steam Deck")));
+    }
+
+    /// What the game gets from the window's saved settings (Wine).
+    fn game_gets(ui: &Harness<'static, Window>) -> crate::plan::Plan {
+        let settings = ui.state().form.settings();
+        let picture = settings.picture(ui.state().screen);
+        crate::plan::plan(
+            &picture,
+            std::path::Path::new(r"C:\r"),
+            std::path::Path::new(r"C:\s"),
+            true,
+        )
+    }
+
+    fn registry(plan: &crate::plan::Plan) -> Vec<String> {
+        plan.registry.iter().map(ToString::to_string).collect()
+    }
+
+    #[test]
+    fn the_resolution_field_reaches_the_registry_and_the_widescreen_view() {
+        let mut ui = open("");
+        ui.get_by_role_and_label(Role::Tab, "Picture").click();
+        ui.run();
+        let field = ui.get_by_role_and_label(Role::TextInput, "Resolution");
+        field.focus();
+        field.type_text("2560x1440");
+        ui.run();
+        let saved = ui.state().form.settings();
+        assert_eq!(saved.resolution, Some(Resolution::Size(2560, 1440)));
+        assert_eq!(
+            saved.resolution,
+            flags(&["--resolution", "2560x1440"]).resolution
+        );
+        let plan = game_gets(&ui);
+        assert!(registry(&plan).contains(&"WIDTH = dword:2560".to_owned()));
+        assert!(registry(&plan).contains(&"HEIGHT = dword:1440".to_owned()));
+        assert_eq!(plan.args, [crate::plan::WIDESCREEN_ARG]);
+    }
+
+    #[test]
+    fn the_frame_rate_cap_reaches_dxvk() {
+        let mut ui = open("fps_limit = 59\n");
+        ui.get_by_role_and_label(Role::Tab, "Picture").click();
+        ui.run();
+        let slider = ui.get_by_role_and_label(Role::Slider, "Frame-rate cap");
+        slider.focus();
+        ui.run();
+        ui.key_press(egui::Key::ArrowRight);
+        ui.run();
+        let saved = ui.state().form.settings();
+        assert_eq!(saved.fps_limit, Some(60));
+        assert_eq!(saved.fps_limit, flags(&["--fps-limit", "60"]).fps_limit);
+        let plan = game_gets(&ui);
+        let conf = plan.files[0].1.as_deref().unwrap();
+        assert!(conf.contains("d3d9.maxFrameRate = 60"), "{conf}");
+    }
+
+    #[test]
+    fn the_vsync_switch_reaches_dxvk() {
+        let mut ui = open("vsync = on\n");
+        ui.get_by_role_and_label(Role::Tab, "Picture").click();
+        ui.run();
+        ui.get_by_role_and_label(Role::Switch, "VSync").click();
+        ui.run();
+        let conf = game_gets(&ui).files[0].1.clone().unwrap();
+        assert!(conf.contains("d3d9.presentInterval = 0"), "{conf}");
+    }
+
+    #[test]
+    fn each_look_card_reaches_the_game() {
+        for (label, size, arg) in [
+            ("Original", None, false),
+            ("Widescreen", Some("WIDTH = dword:1920"), true),
+            ("Steam Deck", Some("WIDTH = dword:1280"), true),
+        ] {
+            let mut ui = open("");
+            ui.get_by_label(label).click();
+            ui.run();
+            let plan = game_gets(&ui);
+            match size {
+                Some(width) => assert!(registry(&plan).contains(&width.to_owned()), "{label}"),
+                None => assert_eq!(registry(&plan).len(), 2, "{label}: only the paths"),
+            }
+            assert_eq!(!plan.args.is_empty(), arg, "{label}");
+        }
     }
 
     #[test]

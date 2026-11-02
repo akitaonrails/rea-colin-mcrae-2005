@@ -1,0 +1,25 @@
+flags: --look widescreen
+screen: 3440x1440, Wine: true
+picture: resolution 2560x1440, fps_limit 0, vsync on
+
+arguments: WIDESCREENDISPLAY
+components installed: d3d9.dll
+components taken out: (none)
+prefer fast GPU: false
+
+[registry HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005]
+INSTALL_PATH = string:"C:\\users\\player\\AppData\\Local\\CMR2005Launcher\\runtime"
+SAVEGAME_PATH = string:"C:\\users\\player\\AppData\\Local\\CMR2005Launcher\\saves"
+WIDTH = dword:2560
+HEIGHT = dword:1440
+
+[Wine per-program DLL overrides for cmr5.exe, set when absent]
+d3d9 = native,builtin
+
+[environment]
+REA_CLOSE_HOOK=class=PC_CMR5;strategy=terminate
+
+[file dxvk.conf]
+# Written by CMR2005Launcher on every start; change the settings in the launcher.
+d3d9.maxFrameRate = 0
+d3d9.presentInterval = 1

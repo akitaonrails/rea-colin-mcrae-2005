@@ -34,6 +34,10 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 - A screen mode the display does not list is replaced by the nearest
   listed 16:9 mode (the game quits at once otherwise).
 - One launcher at a time.
+- The settings window takes the game's identity: the menus' white band,
+  warm-black headings and sepia, the logo's red for Play, and a sepia
+  photo of Colin McRae's Škoda Fabia WRC at Wales Rally GB 2005 (KevBow,
+  CC BY 2.0). Sliders and number boxes are light with dark text.
 - `linux/cmr2005-play`: gamescope takes the size the look gives (the
   screen for Widescreen and the first start, 1280x800 for Steam Deck,
   640x480 for Original); a `resolution` or flag wins.

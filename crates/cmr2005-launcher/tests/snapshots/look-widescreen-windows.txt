@@ -1,0 +1,19 @@
+flags: --look widescreen
+screen: 2560x1440, Wine: false
+picture: resolution 2560x1440, fps_limit 0, vsync on
+
+arguments: WIDESCREENDISPLAY
+components installed: (none)
+components taken out: d3d9.dll
+prefer fast GPU: true
+
+[registry HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005]
+INSTALL_PATH = string:"C:\\users\\player\\AppData\\Local\\CMR2005Launcher\\runtime"
+SAVEGAME_PATH = string:"C:\\users\\player\\AppData\\Local\\CMR2005Launcher\\saves"
+WIDTH = dword:2560
+HEIGHT = dword:1440
+
+[environment]
+REA_CLOSE_HOOK=class=PC_CMR5;strategy=terminate
+
+[file dxvk.conf: removed]

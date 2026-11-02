@@ -45,6 +45,30 @@ pub const PALETTE: Palette = Palette {
 
 pub const METRICS: Metrics = Metrics::DEFAULT;
 
+/// Widget fills for a light palette. The SDK theme (v0.3.3) starts from
+/// egui's dark visuals and sets no widget fill, so sliders, number boxes and
+/// buttons stay dark grey under this palette's dark text. Call after
+/// `theme::install_with`. To be fixed in rea-launcher-sdk
+/// (docs/CONTRIBUTIONS.md), then removed here.
+pub fn light_widgets(ctx: &rea_launcher_ui::egui::Context) {
+    let hover = Color32::from_rgb(0xe2, 0xdb, 0xd4);
+    ctx.all_styles_mut(move |style| {
+        let w = &mut style.visuals.widgets;
+        for (widget, fill) in [
+            (&mut w.noninteractive, PANEL),
+            (&mut w.inactive, PANEL),
+            (&mut w.hovered, hover),
+            (&mut w.active, hover),
+            (&mut w.open, hover),
+        ] {
+            widget.bg_fill = fill;
+            widget.weak_bg_fill = fill;
+            widget.fg_stroke.color = INK;
+        }
+        style.visuals.faint_bg_color = PANEL;
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -56,6 +80,26 @@ mod tests {
             theme::contrast_problems(&PALETTE, &METRICS),
             Vec::<String>::new()
         );
+    }
+
+    #[test]
+    fn widgets_are_light_with_dark_text() {
+        let ctx = rea_launcher_ui::egui::Context::default();
+        theme::install_with(&ctx, &PALETTE, &METRICS);
+        light_widgets(&ctx);
+        let style = ctx.style_of(rea_launcher_ui::egui::Theme::Dark);
+        for widget in [
+            &style.visuals.widgets.inactive,
+            &style.visuals.widgets.hovered,
+        ] {
+            assert!(
+                theme::contrast(INK, widget.bg_fill) >= 4.5,
+                "{:?} on {:?}",
+                INK,
+                widget.bg_fill
+            );
+            assert_eq!(widget.weak_bg_fill, widget.bg_fill);
+        }
     }
 
     #[test]
