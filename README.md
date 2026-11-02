@@ -9,10 +9,11 @@ never changed; the launcher plays from a private copy.
 
 This project contains no game files: you need your own copy of the game.
 
-> Played end to end on Linux (Wine 11 inside gamescope): unpacking the GOG
-> installer, the intro videos, the menus and a stage, every look, quitting
-> by closing the window. Not tested yet: Windows itself, the Steam Deck,
-> Proton, controllers, and sound beyond "no errors". Reports are welcome:
+> Played end to end on Linux with the AppImage and with Wine 11 inside
+> gamescope: unpacking the GOG installer, the intro videos, the menus and
+> a stage, every look, quitting by closing the window. Not tested yet:
+> Windows itself, the Steam Deck, Proton, controllers, and sound beyond
+> "no errors". Reports are welcome:
 > [open an issue](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=bug-report.yml).
 
 <!-- Showcase video: a poster image linked to the video, both hosted outside

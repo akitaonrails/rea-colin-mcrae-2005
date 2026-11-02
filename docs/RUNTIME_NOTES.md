@@ -154,6 +154,19 @@ package and `CMR2005_PREFIX` = `prefix-e2e2`, gamescope wrapped to
 | h01 | `cmr2005-play stop` with the game running | the helper chose the NVIDIA GPU and 1920×1080; **game and helper gone in 0.28 s**, nothing left |
 | h02 | SIGINT to the helper's process group (Ctrl+C) | **game and helper gone in 0.40 s** (exit 143), nothing left |
 
+### 2026-11-02: the AppImage (`packaging/package.sh`, portable Wine 11.20)
+
+`APPIMAGE_EXTRACT_AND_RUN=1 CMR2005Launcher-dev-x86_64.AppImage --play --game <installed folder>`
+through `helper.sh` (gamescope headless on `PATH`), fresh prefix `prefix-e2e3`.
+
+| Run | Result |
+|---|---|
+| a01 | **failed**: the AppImage had no `components/` ("d3d9.dll and rea_close_hook.dll is missing"); fixed with `--payload components` in `package.sh` (and the message's grammar) |
+| a02 | components found, runtime built (5207 linked), registry and DXVK set, the game ran at 1920×1080 with `WIDESCREENDISPLAY`; `stop`: **game and helper gone in 0.71 s**, nothing left |
+
+gamescope 3.17.0 segfaulted on exit again (exit 139 of the helper in a01),
+as CMR4 recorded; it happens after the game is gone.
+
 ### Not verified yet
 
 - Menu music (WMA) and sound in general (audio went to a null sink).

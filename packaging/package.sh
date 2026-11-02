@@ -33,32 +33,42 @@ cp "$ROOT"/packaging/licenses/* "$pkg/licenses/"
 
 # Third-party components from packaging/third-party.txt, each checked by
 # SHA-256 (the archive, then the one file taken out of it).
-. "$ROOT/sdk/packaging/pins.sh"
-PIN_FILE=$ROOT/packaging/third-party.txt
-[ -n "${REA_CACHE:-}" ] && PIN_CACHE=$REA_CACHE/pins
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
 mkdir -p "$pkg/components" "$pkg/licenses/innoextract"
+if [ "${REA_STANDIN_COMPONENTS:-}" = 1 ]; then
+  # packaging/tests: stand-ins, no network and no build.
+  for f in components/d3d9.dll components/innoextract.exe components/rea_close_hook.dll \
+    licenses/innoextract/innoextract.LICENSE.txt licenses/innoextract/Boost.LICENSE_1_0.txt \
+    licenses/innoextract/liblzma.COPYING.txt licenses/innoextract/libstdc++.COPYING3.txt \
+    licenses/innoextract/libstdc++.COPYING.RUNTIME.txt; do
+    printf 'stand-in\n' > "$pkg/$f"
+  done
+else
+  . "$ROOT/sdk/packaging/pins.sh"
+  PIN_FILE=$ROOT/packaging/third-party.txt
+  [ -n "${REA_CACHE:-}" ] && PIN_CACHE=$REA_CACHE/pins
+  work=$(mktemp -d)
+  trap 'rm -rf "$work"' EXIT
 
-tarball=$(pin_fetch dxvk "$work")
-tar -xzf "$tarball" -C "$work" dxvk-3.1.1/x32/d3d9.dll
-pin_verify "$work/dxvk-3.1.1/x32/d3d9.dll" "$(pin_sha dxvk-d3d9)"
-cp "$work/dxvk-3.1.1/x32/d3d9.dll" "$pkg/components/d3d9.dll"
+  tarball=$(pin_fetch dxvk "$work")
+  tar -xzf "$tarball" -C "$work" dxvk-3.1.1/x32/d3d9.dll
+  pin_verify "$work/dxvk-3.1.1/x32/d3d9.dll" "$(pin_sha dxvk-d3d9)"
+  cp "$work/dxvk-3.1.1/x32/d3d9.dll" "$pkg/components/d3d9.dll"
 
-zip=$(pin_fetch innoextract "$work")
-unzip -q "$zip" innoextract.exe 'license/*' -d "$work/innoextract"
-pin_verify "$work/innoextract/innoextract.exe" "$(pin_sha innoextract-exe)"
-cp "$work/innoextract/innoextract.exe" "$pkg/components/innoextract.exe"
-cp "$work/innoextract/license/"*.txt "$pkg/licenses/innoextract/"
+  zip=$(pin_fetch innoextract "$work")
+  unzip -q "$zip" innoextract.exe 'license/*' -d "$work/innoextract"
+  pin_verify "$work/innoextract/innoextract.exe" "$(pin_sha innoextract-exe)"
+  cp "$work/innoextract/innoextract.exe" "$pkg/components/innoextract.exe"
+  cp "$work/innoextract/license/"*.txt "$pkg/licenses/innoextract/"
 
-# The SDK's close hook, built from the pinned SDK (a dependency, not a
-# workspace member; CI builds it next to the launcher).
-hook=$release/rea_close_hook.dll
-if [ ! -f "$hook" ]; then
-  (cd "$ROOT" && cargo build --release --locked --target i686-pc-windows-gnu -p rea-launcher-close-hook)
-  hook=$ROOT/target/i686-pc-windows-gnu/release/rea_close_hook.dll
+  # The SDK's close hook, built from the pinned SDK (a dependency, not a
+  # workspace member; CI builds it next to the launcher).
+  hook=$release/rea_close_hook.dll
+  if [ ! -f "$hook" ]; then
+    (cd "$ROOT" && cargo build --release --locked --target i686-pc-windows-gnu -p rea-launcher-close-hook)
+    hook=$ROOT/target/i686-pc-windows-gnu/release/rea_close_hook.dll
+  fi
+  cp "$hook" "$pkg/components/rea_close_hook.dll"
 fi
-cp "$hook" "$pkg/components/rea_close_hook.dll"
 
 (cd "$dist" && rm -f "$name.zip" && zip -qr "$name.zip" "$name")
 
@@ -67,6 +77,7 @@ if [ -n "$appimage" ]; then
     --env-prefix CMR2005 \
     --icon "$ROOT/packaging/appimage/cmr2005-launcher.png" \
     --desktop "$ROOT/packaging/appimage/cmr2005-launcher.desktop" \
+    --payload components \
     --doc licenses \
     ${REA_CACHE:+--cache "$REA_CACHE"} \
     --name "$name" "$pkg" "$dist"

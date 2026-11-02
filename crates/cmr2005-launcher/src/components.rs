@@ -65,8 +65,9 @@ pub fn validate(components: &Path, wine: bool) -> Result<(), String> {
     if missing.is_empty() {
         Ok(())
     } else {
+        let verb = if missing.len() == 1 { "is" } else { "are" };
         Err(format!(
-            "The launcher's {} is missing in {}. Unpack the whole launcher package again.",
+            "The launcher's {} {verb} missing in {}. Unpack the whole launcher package again.",
             missing.join(" and "),
             components.display()
         ))
@@ -148,7 +149,10 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let error = validate(&dir, true).unwrap_err();
-        assert!(error.contains("d3d9.dll and rea_close_hook.dll"), "{error}");
+        assert!(
+            error.contains("d3d9.dll and rea_close_hook.dll are missing"),
+            "{error}"
+        );
         fs::write(dir.join(CLOSE_HOOK_DLL), b"hook").unwrap();
         assert!(validate(&dir, false).is_ok());
         let error = validate(&dir, true).unwrap_err();

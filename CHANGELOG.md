@@ -34,6 +34,9 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 - A screen mode the display does not list is replaced by the nearest
   listed 16:9 mode (the game quits at once otherwise).
 - One launcher at a time.
+- The zip and the AppImage carry `components/` (DXVK's `d3d9.dll`,
+  innoextract, the close hook), fetched by SHA-256 at package time; CI
+  builds the close hook.
 - The settings window takes the game's identity: the menus' white band,
   warm-black headings and sepia, the logo's red for Play, and a sepia
   photo of Colin McRae's Škoda Fabia WRC at Wales Rally GB 2005 (KevBow,

@@ -11,7 +11,7 @@ fail() { echo "FAIL $1"; fails=$((fails + 1)); }
 
 mkdir -p "$T/release"
 printf 'MZ stand-in\n' > "$T/release/CMR2005Launcher.exe"
-if REA_RELEASE_DIR=$T/release sh "$ROOT/packaging/package.sh" --no-appimage \
+if REA_STANDIN_COMPONENTS=1 REA_RELEASE_DIR=$T/release sh "$ROOT/packaging/package.sh" --no-appimage \
   "$T/dist/CMR2005Launcher-v0.0.0" > "$T/out" 2>&1; then
   ok "package.sh builds the folder and zip"
 else
@@ -24,7 +24,7 @@ for p in "$T/dist/CMR2005Launcher-v0.0.0" "$T/dist/CMR2005Launcher-v0.0.0.zip"; 
     fail "allowlist: $(basename "$p"): $(cat "$T/out")"
   fi
 done
-if REA_RELEASE_DIR=$T/nowhere sh "$ROOT/packaging/package.sh" --no-appimage "$T/dist/x" > /dev/null 2>&1; then
+if REA_STANDIN_COMPONENTS=1 REA_RELEASE_DIR=$T/nowhere sh "$ROOT/packaging/package.sh" --no-appimage "$T/dist/x" > /dev/null 2>&1; then
   fail "a missing exe must fail"
 else
   ok "a missing exe fails"
