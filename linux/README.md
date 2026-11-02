@@ -1,9 +1,3 @@
-<!--
-  For agents: follows sdk/docs/playbooks/readme.md ("linux/README.md").
-  Fill the TODOs, keep the headings, then run this file through the
-  `humanizer` skill (wording only) and delete this comment.
--->
-
 # Colin McRae Rally 2005 on Linux
 
 The launcher is a Windows program (the same one as on Windows); on Linux
@@ -37,7 +31,7 @@ game runs in it; otherwise in a plain window. Its Wine prefix is
 Follow the steps above in Desktop Mode, then play from Game Mode. The
 window recommends the **Steam Deck** look and works with the controls.
 
-<!-- TODO: say whether Game Mode has been verified. -->
+Game Mode has not been tested yet.
 
 ## Your own Wine
 
@@ -76,12 +70,18 @@ CMR2005_RUN="distrobox enter gaming --" linux/cmr2005-play
 |---|---|
 | Settings (`launcher.cfg`) and log (`launcher.log`) | in the prefix, `drive_c/users/<you>/AppData/Local/CMR2005Launcher/` |
 | The launcher's copy of the game | `…/AppData/Local/CMR2005Launcher/runtime` |
-| Your saves | TODO |
+| Your saves | `…/AppData/Local/CMR2005Launcher/saves` |
+| The game unpacked from GOG's installer | `…/AppData/Local/CMR2005Launcher/game` |
 | `cmr2005-play`'s logs and lock | `~/.config/cmr2005-launcher` |
 
 ## Troubleshooting
 
-<!-- TODO: Linux-only problems found in testing, as bold symptom + fix. -->
+- **GOG's installer hangs under Wine:** don't run it. Point the launcher
+  at the folder with `setup_colin2005.exe` and its two `.bin` files; it
+  unpacks the game itself.
+- **The game window doesn't close on Alt+F4 inside gamescope:** close it
+  with `linux/cmr2005-play stop`, Ctrl+C in the terminal, or your desktop's
+  close shortcut.
 
 - **Anything else:** run `CMR2005Launcher.exe --check` through the AppImage or
   `cmr2005-play`, and look at `launcher.log` (see the table above).

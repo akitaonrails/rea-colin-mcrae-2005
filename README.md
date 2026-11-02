@@ -203,8 +203,9 @@ user, and the game reads them from there.
   incomplete. Download it again from GOG.
 - **"Unpacking the game needs about 3 GB free":** free some space, or set
   `runtime` to a folder on another drive (the unpacked game goes beside it).
-- **Alt+F4 does nothing in the game:** the game keeps the keyboard to
-  itself. Close the window instead, or quit from the game's menu.
+- **Alt+F4 does nothing in the game:** the keys never reach the game's
+  window (it seems to keep the keyboard to itself). Close the window
+  instead, or quit from the game's menu.
 - **Anything else:** run `CMR2005Launcher.exe --check`, then open an issue
   with the [bug form](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=bug-report.yml)
   and attach `launcher.log` (remove personal paths). Never attach game files.
