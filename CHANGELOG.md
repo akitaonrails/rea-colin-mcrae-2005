@@ -34,6 +34,9 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 - A screen mode the display does not list is replaced by the nearest
   listed 16:9 mode (the game quits at once otherwise).
 - One launcher at a time.
+- A new Wine prefix's first start no longer fails to open the settings
+  window ("failed to find a matching configuration"): after switching Wine
+  to GLX the launcher starts itself again, so the switch applies.
 - The zip and the AppImage carry `components/` (DXVK's `d3d9.dll`,
   innoextract, the close hook), fetched by SHA-256 at package time; CI
   builds the close hook.

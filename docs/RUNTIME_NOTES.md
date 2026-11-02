@@ -167,6 +167,16 @@ through `helper.sh` (gamescope headless on `PATH`), fresh prefix `prefix-e2e3`.
 gamescope 3.17.0 segfaulted on exit again (exit 139 of the helper in a01),
 as CMR4 recorded; it happens after the game is gone.
 
+### 2026-11-02: the owner's desktop (Hyprland), the AppImage
+
+The first start in a new prefix: the settings window failed (exit 9,
+eframe "failed to find a matching configuration for creating glutin
+config"). The launcher had just written `UseEGL=N`, but Wine reads it when
+a process starts, so that process still drew through EGL. The second start
+opened the window. Fixed: after writing the value the launcher starts
+itself again (single-instance lock released first). Checked in a fresh
+headless prefix (w06): the log shows the restart and the window opens.
+
 ### Not verified yet
 
 - Menu music (WMA) and sound in general (audio went to a null sink).

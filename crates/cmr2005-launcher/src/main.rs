@@ -129,7 +129,7 @@ mod app {
         }
         // Held until the game exits: a second start brings the window
         // forward, or says the game is running; an action flag is refused.
-        let _instance = match instance::single(INSTANCE) {
+        let instance = match instance::single(INSTANCE) {
             Ok(guard) => guard,
             Err(running) => {
                 if invocation.mode == Mode::Check {
@@ -148,9 +148,21 @@ mod app {
         if let Mode::Window { settings_only } = invocation.mode {
             if wine::is_wine() {
                 match gpu::prefer_glx() {
-                    Ok(true) => out
-                        .log
-                        .line("settings window: OpenGL through GLX (UseEGL=N)"),
+                    Ok(true) => {
+                        // Wine chose EGL when this process started; on EGL the
+                        // window's OpenGL setup fails (a fresh prefix's first
+                        // start). The setting counts from the next process, so
+                        // run again; that one finds it set and goes on.
+                        out.log.line(
+                            "settings window: OpenGL through GLX (UseEGL=N); starting again to use it",
+                        );
+                        let exe = std::env::current_exe()
+                            .map_err(|error| format!("Cannot find the launcher: {error}"))?;
+                        // The next process takes the single-instance lock.
+                        drop(instance);
+                        let code = Launch::new(&exe).args(std::env::args().skip(1)).run()?;
+                        return Ok(code as i32);
+                    }
                     Ok(false) => {}
                     Err(error) => out.warn(&error.to_string()),
                 }
@@ -170,6 +182,8 @@ mod app {
             }
         }
 
+        // Held until the game exits.
+        let _instance = instance;
         let screen = display::screen_size();
         let existing = cfg::read_file(&path)
             .map_err(|error| format!("Cannot read {}: {error}", path.display()))?;
