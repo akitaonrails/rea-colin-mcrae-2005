@@ -38,7 +38,7 @@ Status: ✅ verified · ⚠️ partly (see notes) · ❌ fails · — not yet ch
 | Windows 10 | — | |
 | Proton, without our Linux helper (Steam, non-Steam game) | — | |
 | Linux AppImage (portable Wine) | — | |
-| Linux, `linux/cmr2005-play` with system Wine | ⚠️ headless gamescope only (h01–h02, v01–v12) | every way of quitting ends everything; play-time errors are dialogs |
+| Linux, `linux/cmr2005-play` with system Wine | ⚠️ headless gamescope only (h01–h02, v01–v12, w01–w10) | every way of quitting ends everything (Alt+F4 only with the mouse moving); play-time errors are dialogs; a second start exits 5 |
 | Steam Deck, Game Mode (controller, 1280×800, suspend/resume) | — | the helper inside an existing gamescope (no nested one) ran the window and the game headless (v10–v12) |
 | Multi-monitor | — | |
 | HiDPI / 4K | — | |
@@ -268,6 +268,62 @@ missing folder, then a folder whose `cmr5.exe` is random bytes):
 | v06-old, v07-old | before the fix | **no dialog**: the launcher printed the error into `play.log` and ended, so the game simply never appeared |
 | v06, v07 | the fix (`report`, see CHANGELOG; rerun with the committed build) | a dialog: "There is no folder Z:\…\no-such-folder." and the unknown-`cmr5.exe` refusal with its SHA-256 and the issue link; also in `play.log`; `cmr2005-play stop` while it shows ends everything |
 | v08 | the fix, Enter on OK | launcher, helper and gamescope gone; nothing left |
+
+### 2026-11-02: rea-launcher-sdk v0.4.1 (dev package)
+
+Release i686 build of the `sdk-update/v0.4.1` branch packaged with
+`packaging/package.sh --no-appimage`, Wine 11.21 and gamescope 3.17.0 in
+the `gaming` distrobox, every run started from `env -i`, a private PipeWire
+null sink (WirePlumber's device monitors off), one throwaway prefix
+`.work/realgame/prefix-w1`, the game unpacked by the launcher from the
+owner's GOG installer (read only, on the NAS). Harness:
+`.work/realgame/bin/w.sh` (`vhelper.sh` with more steps), `wraces.sh`,
+`waltf4.sh`, `wsecond.sh`; evidence in `.work/realgame/logs/w0*`–`w10*`.
+After every run the process table was checked as before; runs that ended
+the game left nothing (w07 below is the exception, cleaned up by the harness).
+
+| Run | What | Result |
+|---|---|---|
+| w01 | fresh prefix, `cmr2005-play --play --game <the installer folder>` | the launcher wrote `UseEGL=N` and started itself again once (`gpu::prefer_glx_or_restart`), the unpack window ran, the game started (5219 files, 5207 linked) |
+| w03 | `--look original`, a Time Trial stage | gamescope 640x480 (`REA_LOOK_SIZES`), the game 4:3 at 640x480; the stage runs (timer 00:32) |
+| w04 | `--look widescreen` | gamescope and the game 1920x1080 with `WIDESCREENDISPLAY`; the stage runs |
+| w05 | `--look steam_deck` | gamescope 1280x800, the game 1280x720 with `fps_limit 60`; the stage runs |
+| w07 a | `CMR2005Launcher.exe --check` while the game runs | exit 5, "Colin McRae Rally 2005 is already running from this launcher…" printed, no dialog |
+| w07 b | `CMR2005Launcher.exe --no-window` while the game runs | the same message as a dialog; OK → exit 5 |
+| w07 c | `cmr2005-play --play` while the game runs | the helper says "already running", exit 5, nothing started |
+| w07 d | the launcher killed (SIGKILL), the game left running, a new `--no-window` start | refused by `process::find_running` after the game folder check, before the runtime copy is touched; exit 5 |
+| w08 | `launcher.cfg` naming a missing folder, `cmr2005-play --play` | dialog "There is no folder Z:\…\no-such-folder."; OK → launcher, helper and gamescope gone |
+| w09, w10 | the settings window (the helper's default start) | titled "Colin McRae Rally 2005 Launcher"; Play tab as in `docs/images` (the SDK's light widget fills give the same resting colours as the removed local override: panel fill, ink text); closing it starts nothing |
+
+**Quitting:**
+
+| Run | How | Result |
+|---|---|---|
+| w03 | SIGTERM to the helper during the stage | everything gone in 0.5 s (exit 143) |
+| w04 | `WM_DELETE_WINDOW` to `cmr5.exe` (compositor close) during the stage | "game exited with 0"; everything gone in 0.9 s |
+| w05 | TERM to the helper's gamescope during the stage | everything gone in 0.9 s (exit 139: gamescope's segfault on exit) |
+| w06 | the game's menu: Exit → Yes | the game gone 0.4 s after Yes, "game exited with 0"; nothing left |
+| w01, w02 | Alt+F4 (XTest) at the intro videos and at the title screen, alone and held for 2 s | **ignored**: the game kept running |
+| w02 | mouse moves alone | the game kept running |
+| w02 | Alt+F4 held while the mouse moves | **the game ended** within 4 s ("game exited with 0"), launcher, helper and gamescope gone |
+
+`close_on = alt_f4_state` reads Alt+F4 from the keyboard state when the
+game's thread takes a message. With the exclusive DirectInput keyboard no
+message arrives for the keys, so Alt+F4 alone is still not seen; any other
+message (the mouse) lets the hook see it. Drafted for the SDK in
+`CONTRIBUTIONS.md` (a timer in the hook).
+
+**Found:** in w07 d, killing the launcher (SIGKILL, not a way players
+quit) ended `cmr2005-play` and its gamescope but left `cmr5.exe` running
+in the prefix without a display; the harness ended it. The helper waits
+for the launcher, not the game (`REA_GAME_PROCS` is unset). Candidate:
+`REA_GAME_PROCS=cmr5.exe`. Not changed here.
+
+**Not explained:** in w09 the game started without input a few seconds
+after the settings window had been captured (as if Play was pressed);
+w10, the same start, stayed idle for 20 s and closed without Play. A pad
+on the host seen through the box's `/dev/input` is the likeliest cause;
+not reproduced.
 
 ### Not verified yet
 

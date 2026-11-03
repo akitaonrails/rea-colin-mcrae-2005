@@ -5,8 +5,25 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Changed
+
+- Updated rea-launcher-sdk to v0.4.1.
+- Starting the launcher a second time while the game runs now says so
+  and exits with code 5. Before, it quietly exited with 0. If the
+  settings window is open, it comes to the front as before.
+- The settings window is titled "Colin McRae Rally 2005 Launcher", so it
+  can't be mistaken for the game's own window.
+
 ### Fixed
 
+- If the launcher was closed by force while the game kept running, the
+  next start no longer prepares the game's files under the running game.
+  It says the game is still running instead.
+- Alt+F4 in the game: the launcher now reads it from the keyboard, which
+  the game keeps to itself. The game only notices it when something else
+  happens at the same moment, such as the mouse moving, so with only the
+  keyboard Alt+F4 still does nothing. Closing the window and the game's
+  own Exit work as before.
 - Under `cmr2005-play`, the AppImage and Proton, an error when Play
   starts the game (the game folder is gone, an unknown `cmr5.exe`) is now
   shown in a dialog. Before, it only went to `play.log` and the game

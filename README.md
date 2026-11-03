@@ -183,7 +183,10 @@ own switches:
 | `--linux` | started by `linux/cmr2005-play` |
 | `--help` | the options |
 
-A bad flag or value exits with 2 and says what is wrong.
+A bad flag or value exits with 2 and says what is wrong. Starting the
+launcher while it (or its game) already runs brings its window to the
+front; when there is no window, it says the game is running and exits
+with 5.
 
 ## Where things live
 
@@ -218,9 +221,13 @@ user, and the game reads them from there.
   incomplete. Download it again from GOG.
 - **"Unpacking the game needs about 3 GB free":** free some space, or set
   `runtime` to a folder on another drive (the unpacked game goes beside it).
-- **Alt+F4 does nothing in the game:** the keys never reach the game's
-  window (it seems to keep the keyboard to itself). Close the window
-  instead, or quit from the game's menu.
+- **Alt+F4 does nothing in the game:** the game keeps the keyboard to
+  itself. The launcher reads Alt+F4 from the keyboard, but the game only
+  notices when something else happens at the same time: hold Alt+F4 and
+  move the mouse. Or close the window, or quit from the game's menu.
+- **"Colin McRae Rally 2005 is already running from this launcher":**
+  the game (or another launcher) is still running, perhaps hidden. Quit
+  it first; on Linux, `linux/cmr2005-play stop` ends it.
 - **The game opens in a window called "CMR2005 - Wine Desktop":** your
   main monitor is in portrait, and the game only works on the main
   monitor, so the launcher gives it a landscape screen of its own inside
@@ -238,7 +245,8 @@ user, and the game reads them from there.
 
 - The game's widescreen view is exact only at 16:9. On 16:10 and ultrawide
   screens the Widescreen look uses a 16:9 picture inside the screen.
-- Alt+F4 pressed inside the game is not seen. Closing the window works.
+- Alt+F4 pressed inside the game works only while the mouse moves (or
+  another message reaches the game). Closing the window works.
 - The frame-rate cap and VSync work under Wine and Proton only. On Windows
   the game keeps its own behaviour.
 - Online play used GameSpy, which is gone.

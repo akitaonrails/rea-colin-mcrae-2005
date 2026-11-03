@@ -79,8 +79,9 @@ CMR2005_RUN="distrobox enter gaming --" linux/cmr2005-play
 - **GOG's installer hangs under Wine:** don't run it. Point the launcher
   at the folder with `setup_colin2005.exe` and its two `.bin` files; it
   unpacks the game itself.
-- **The game window doesn't close on Alt+F4 inside gamescope:** close it
-  with `linux/cmr2005-play stop` or Ctrl+C in the terminal.
+- **The game window doesn't close on Alt+F4 inside gamescope:** hold
+  Alt+F4 and move the mouse, or close it with `linux/cmr2005-play stop`
+  or Ctrl+C in the terminal.
 
 - **Anything else:** run `CMR2005Launcher.exe --check` through the AppImage or
   `cmr2005-play`, and look at `launcher.log` (see the table above).
