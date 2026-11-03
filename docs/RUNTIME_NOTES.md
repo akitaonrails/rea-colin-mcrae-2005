@@ -38,7 +38,7 @@ Status: ✅ verified · ⚠️ partly (see notes) · ❌ fails · — not yet ch
 | Windows 10 | — | |
 | Proton, without our Linux helper (Steam, non-Steam game) | — | |
 | Linux AppImage (portable Wine) | — | |
-| Linux, `linux/cmr2005-play` with system Wine | ⚠️ headless gamescope only (h01–h02, v01–v12, w01–w10) | every way of quitting ends everything (Alt+F4 only with the mouse moving); play-time errors are dialogs; a second start exits 5 |
+| Linux, `linux/cmr2005-play` with system Wine | ⚠️ headless gamescope only (h01–h02, v01–v12, w01–w11) | every way of quitting ends everything (Alt+F4 only with the mouse moving); play-time errors are dialogs; a second start exits 5 |
 | Steam Deck, Game Mode (controller, 1280×800, suspend/resume) | — | the helper inside an existing gamescope (no nested one) ran the window and the game headless (v10–v12) |
 | Multi-monitor | — | |
 | HiDPI / 4K | — | |
@@ -278,7 +278,7 @@ null sink (WirePlumber's device monitors off), one throwaway prefix
 `.work/realgame/prefix-w1`, the game unpacked by the launcher from the
 owner's GOG installer (read only, on the NAS). Harness:
 `.work/realgame/bin/w.sh` (`vhelper.sh` with more steps), `wraces.sh`,
-`waltf4.sh`, `wsecond.sh`; evidence in `.work/realgame/logs/w0*`–`w10*`.
+`waltf4.sh`, `wsecond.sh`; evidence in `.work/realgame/logs/w0*`–`w11*`.
 After every run the process table was checked as before; runs that ended
 the game left nothing (w07 below is the exception, cleaned up by the harness).
 
@@ -313,11 +313,20 @@ message arrives for the keys, so Alt+F4 alone is still not seen; any other
 message (the mouse) lets the hook see it. Drafted for the SDK in
 `CONTRIBUTIONS.md` (a timer in the hook).
 
-**Found:** in w07 d, killing the launcher (SIGKILL, not a way players
-quit) ended `cmr2005-play` and its gamescope but left `cmr5.exe` running
-in the prefix without a display; the harness ended it. The helper waits
-for the launcher, not the game (`REA_GAME_PROCS` is unset). Candidate:
-`REA_GAME_PROCS=cmr5.exe`. Not changed here.
+**Found, then fixed (w07 d, w11):** in w07 d the harness killed every
+process whose command line named the launcher: the launcher, but also the
+session's inner script and gamescope. `cmr5.exe` was left running in the
+prefix without a display. In real use only the launcher dies (a crash, a
+task manager), and the session's inner script then ran `wineserver -k`,
+taking the game with it, because the helper waited for the launcher, not
+the game. `cmr2005-play` now sets `REA_GAME_PROCS=cmr5.exe`: the session
+waits for the game, and ends the prefix after it.
+
+| Run | What | Result |
+|---|---|---|
+| w11 | fresh prefix `prefix-w2`, the game at the title screen, SIGKILL to the launcher's two Wine processes only (found by name and prefix, the exe link Wine's preloader) | the game kept running in the session; 8 s later no launcher, gamescope up |
+| w11 | a new `--no-window` start | the "already running" dialog (`process::find_running`); OK → exit 5; the game still running |
+| w11 | `WM_DELETE_WINDOW` to `cmr5.exe` | game, inner script, helper and gamescope gone in 1.3 s; nothing left in the prefix |
 
 **Not explained:** in w09 the game started without input a few seconds
 after the settings window had been captured (as if Play was pressed);

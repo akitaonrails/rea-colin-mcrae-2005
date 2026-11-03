@@ -16,6 +16,9 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ### Fixed
 
+- Linux (`cmr2005-play`, the AppImage): if the launcher crashes or is
+  closed by force while you play, the game keeps running, and the session
+  ends when the game does. Before, the game was ended with it.
 - If the launcher was closed by force while the game kept running, the
   next start no longer prepares the game's files under the running game.
   It says the game is still running instead.

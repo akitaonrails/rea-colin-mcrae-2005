@@ -48,6 +48,10 @@ REA_WINEDBG_OFF=1                     # a fault ends the game, no hidden debugge
 REA_ORIGINAL_SIZE=640x480             # the game's own mode on its first start
 REA_SCALER_KEY=                       # no scaler option: gamescope's default
 REA_LEGACY_LOCK=off                   # no older helper wrote a pid-only lock
+# The session ends with the game, not the launcher: a launcher that crashes
+# or is killed leaves the game playing, and the prefix is ended (wineserver
+# -k) only once cmr5.exe is gone (RUNTIME_NOTES w07 d, w11).
+REA_GAME_PROCS=cmr5.exe
 # The gamescope size each look gives (the launcher's Look::picture in
 # src/config.rs): Widescreen and Steam Deck the screen, inside which the
 # launcher picks its 16:9 size as it does on a real screen (1280x720 on a

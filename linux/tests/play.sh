@@ -47,12 +47,45 @@ for layout in repo pkg; do
   contains "[$layout] the window opens through the helper" "$(cat "$T/settings" 2>/dev/null)" "CMR2005Launcher.exe --settings --linux"
   contains "[$layout] the game runs in gamescope" "$(cat "$T/ran" 2>/dev/null)" "gamescope -W 1920 -H 1080"
   contains "[$layout] without the window" "$(cat "$T/ran" 2>/dev/null)" "CMR2005Launcher.exe --no-window"
+  # A launcher that crashes or is killed must not take the game with it,
+  # and the session ends only when the game does (RUNTIME_NOTES w07 d).
+  contains "[$layout] the session waits for the game itself" "$(cat "$T/ran" 2>/dev/null)" "REA_GAME_PROCS=cmr5.exe "
   rm -f "$T/ran"
   echo 3 > "$T/rc"
   sh "$play" > "$T/out" 2>&1; rc=$?
   check "[$layout] window closed without Play: nothing starts" "$(cat "$T/ran" 2>/dev/null)" ""
   check "[$layout] stop" "$(sh "$play" stop)" stopped
 done
+
+echo "# the launcher killed while the game runs: the session waits for the game"
+INNER=$T/.config/cmr2005-launcher/inner.sh
+mkdir -p "$T/fake" "$T/proc/4242"
+printf '4242 (cmr5.exe) S 1 4242 4242\n' > "$T/proc/4242/stat"
+printf 'WINEPREFIX=%s\0' "$T/prefix" > "$T/proc/4242/environ"
+cat > "$T/fake/wine" <<'W'
+#!/bin/sh
+echo "launcher killed" >> "$T/order"; exit 137
+W
+cat > "$T/fake/pgrep" <<'P'
+#!/bin/sh
+[ "$2" = cmr5.exe ] && [ -e "$T/alive" ] && echo 4242
+exit 0
+P
+cat > "$T/fake/wineserver" <<'S'
+#!/bin/sh
+echo "wineserver $*" >> "$T/order"
+S
+chmod +x "$T/fake/wine" "$T/fake/pgrep" "$T/fake/wineserver"
+rm -f "$T/order"; : > "$T/alive"
+( sleep 2; rm -f "$T/alive"; echo "game ended" >> "$T/order" ) &
+# The game's process names exactly as cmr2005-play hands them to the session.
+rm -f "$T/ran"; sh "$T/repo/linux/cmr2005-play" --play > /dev/null 2>&1
+sh "$T/repo/linux/cmr2005-play" stop > /dev/null 2>&1
+procs=$(sed -n 's/.* REA_GAME_PROCS=\([^ ]*\) .*/\1/p' "$T/ran" 2>/dev/null)
+PATH=$T/fake:$PATH REA_TEST=1 REA_PROC=$T/proc REA_GAME_PROCS=$procs REA_GAME_SETTLE=0 \
+  REA_GAME_PREFIX=$T/prefix sh "$INNER" CMR2005Launcher.exe --no-window
+wait
+check "the prefix is ended only after the game" "$(tr '\n' ';' < "$T/order")" "launcher killed;game ended;wineserver -k;"
 
 echo "# tests source the script: REA_FUNCTIONS_ONLY=1 + REA_PLAY_HERE"
 got=$(REA_FUNCTIONS_ONLY=1 REA_PLAY_HERE=$T/repo/linux sh -c '
