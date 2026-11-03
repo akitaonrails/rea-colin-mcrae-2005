@@ -469,7 +469,6 @@ mod app {
             options,
             Box::new(|cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
-                crate::palette::light_widgets(&cc.egui_ctx);
                 let mut state = super::Unpacking::new(total);
                 state.hero =
                     HERO_JPEG.and_then(|jpeg| widgets::load_jpeg(&cc.egui_ctx, "hero", jpeg));
@@ -539,7 +538,6 @@ mod app {
             options,
             Box::new(|cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
-                crate::palette::light_widgets(&cc.egui_ctx);
                 let mut window = Window::new(&text, screen);
                 window.linux = linux;
                 window.pick = || {
@@ -621,14 +619,12 @@ mod tests {
     use rea_launcher_ui::testing::{self, Harness, Queryable};
 
     fn open(text: &str) -> Harness<'static, Window> {
-        let ui = testing::harness(
+        testing::harness(
             &PALETTE,
             &METRICS,
             Window::new(text, Some((1920, 1080))),
             draw,
-        );
-        crate::palette::light_widgets(&ui.ctx);
-        ui
+        )
     }
 
     fn flags(args: &[&str]) -> Settings {
@@ -652,7 +648,6 @@ mod tests {
     #[test]
     fn the_unpack_window_can_be_cancelled() {
         let mut ui = testing::harness(&PALETTE, &METRICS, Unpacking::new(100), draw_unpack);
-        crate::palette::light_widgets(&ui.ctx);
         ui.run();
         assert!(ui.query_by_label_contains("first start").is_some());
         assert!(ui.query_by_label_contains("of 100 B").is_none());
