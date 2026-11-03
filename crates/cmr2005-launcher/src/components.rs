@@ -9,7 +9,8 @@
 //! - `dxvk.conf`: the frame-rate cap and VSync.
 //! - The SDK's close hook (`rea_close_hook.dll`): the game ignores Alt+F4
 //!   and window-close requests (run r13/r14), so a close request for its
-//!   window `PC_CMR5` ends it.
+//!   window `PC_CMR5` ends it, and Alt+F4 read from the keyboard state
+//!   (`alt_f4_state`) too.
 //! - innoextract (`innoextract.exe`, zlib), which unpacks GOG's installer
 //!   ([`crate::source`]); it is never copied into the runtime.
 
@@ -29,8 +30,12 @@ pub const INNOEXTRACT: &str = "innoextract.exe";
 
 /// The close hook's configuration, set on the game as `REA_CLOSE_HOOK`:
 /// a close request (`SC_CLOSE` from the window's or the compositor's close,
-/// or Alt+F4) for the game's window ends the process.
-pub const CLOSE_HOOK_CONFIG: &str = "class=PC_CMR5;strategy=terminate";
+/// or Alt+F4) for the game's window ends the process. `alt_f4_state`:
+/// the game's exclusive DirectInput keyboard keeps Alt+F4 from its window,
+/// so the hook reads it from the keyboard state while the window is in
+/// front.
+pub const CLOSE_HOOK_CONFIG: &str =
+    "class=PC_CMR5;close_on=sc_close,alt_f4,alt_f4_state;strategy=terminate";
 
 /// The runtime's record of the components the launcher installed.
 pub const LEDGER: &str = ".cmr2005-components";
@@ -170,5 +175,25 @@ mod tests {
     fn the_close_hook_configuration_parses() {
         let config = rea_close_hook::Config::parse(CLOSE_HOOK_CONFIG);
         assert!(config.is_ok(), "{config:?}");
+    }
+
+    /// The game takes the keyboard through DirectInput in exclusive mode,
+    /// so Alt+F4 never reaches its window as a message (runs r13, e06,
+    /// e09): the hook also reads it from the keyboard state. The window's
+    /// and the compositor's close stay on.
+    #[test]
+    fn the_close_hook_also_reads_alt_f4_from_the_keyboard_state() {
+        let requests = rea_close_hook::Config::parse(CLOSE_HOOK_CONFIG)
+            .unwrap()
+            .requests;
+        assert_eq!(
+            requests,
+            rea_close_hook::Requests {
+                sc_close: true,
+                alt_f4: true,
+                wm_close: false,
+                alt_f4_state: true,
+            }
+        );
     }
 }

@@ -17,7 +17,7 @@ HEIGHT = dword:720
 d3d9 = native,builtin
 
 [environment]
-REA_CLOSE_HOOK=class=PC_CMR5;strategy=terminate
+REA_CLOSE_HOOK=class=PC_CMR5;close_on=sc_close,alt_f4,alt_f4_state;strategy=terminate
 
 [file dxvk.conf]
 # Written by CMR2005Launcher on every start; change the settings in the launcher.

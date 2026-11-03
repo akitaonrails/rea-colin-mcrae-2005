@@ -11,8 +11,9 @@ reviews and posts. Only fixes verified in the real game.
 | PCGamingWiki, Colin McRae Rally 2005 (Issues fixed; Linux) | The startup crash: the install-path registry values | `RUNTIME_NOTES.md` r02–r06, e06 | draft |
 | WineHQ Bugzilla, bug 38198 (comment) | The cause of the `0x41DA27` crash | same | draft |
 | WineHQ AppDB, version 6421 (test report) | What works under Wine 11.21 | `RUNTIME_NOTES.md` | draft |
-| rea-launcher-sdk (issue) | Light palettes: the theme leaves egui's dark widget fills | `src/palette.rs::light_widgets` and its test | draft |
-| rea-launcher-sdk (issue) | Close hook: Alt+F4 never reaches a game with an exclusive DirectInput keyboard | `RUNTIME_NOTES.md` e06, e09 | draft |
+| rea-launcher-sdk (issue) | Light palettes: the theme leaves egui's dark widget fills | `src/palette.rs::light_widgets` and its test | done in SDK v0.4.0 (adopted; local fix removed) |
+| rea-launcher-sdk (issue) | Close hook: Alt+F4 never reaches a game with an exclusive DirectInput keyboard | `RUNTIME_NOTES.md` e06, e09 | done in SDK v0.4.0/v0.4.1 (`close_on = alt_f4_state`, adopted); follow-up draft below: it only acts when a message arrives (w02) |
+| rea-launcher-sdk (issue) | Close hook `alt_f4_state`: no message arrives while only the keyboard is used, so Alt+F4 alone still does nothing | `RUNTIME_NOTES.md` w02 | draft |
 | rea-launcher-sdk (issue) | `report::Audience`: `--help`/`--check` under Wine become a dialog, so a script waits on it | `src/cli.rs::commands_print_only` and its tests | draft |
 
 ## Drafts
@@ -88,7 +89,7 @@ its installer (copied, or unpacked with innoextract).
 > fills from the palette (panel; a hover tint), pick `Visuals::light()` when
 > the base is light, and add a contrast check of ink on the widget fills.
 
-### rea-launcher-sdk issue: Alt+F4 with an exclusive DirectInput keyboard
+### rea-launcher-sdk issue: Alt+F4 with an exclusive DirectInput keyboard (done in v0.4.x)
 
 > CMR2005 ignores window-close requests like CMR04. With
 > `class=PC_CMR5;strategy=terminate` the hook ends it for `SC_CLOSE` and a
@@ -113,3 +114,19 @@ its installer (copied, or unpacked with innoextract).
 > launch options prints into a log nobody reads. Proposal: decide it in
 > the SDK, e.g. a `Run::script` flag or a documented rule for commands
 > under Wine, so launchers stop choosing differently.
+
+### rea-launcher-sdk issue: `alt_f4_state` needs a message to arrive
+
+> v0.4.1's `close_on = alt_f4_state` reads Alt+F4 from the keyboard state
+> in the `WH_GETMESSAGE` hook, so it only acts when the game's thread
+> takes a message from its queue. CMR2005 (exclusive DirectInput
+> keyboard, Wine 11.21, headless gamescope, XTest input, run w02): Alt+F4
+> alone, and Alt+F4 held for 2 s, left the game running; mouse moves alone
+> too; Alt+F4 held while the mouse moved ended it within 4 s ("game exited
+> with 0"). With only the keyboard (or a pad) in use, the game gets no
+> messages, so the press is never seen. Proposal: when `alt_f4_state` is
+> on, the hook also gives the game's window thread a timer
+> (`SetTimer(NULL, …)` from inside the hook on its first call, e.g. every
+> 100 ms) so a `WM_TIMER` message arrives and the state is read; or a
+> watcher thread in the hook DLL that polls `GetAsyncKeyState` and posts
+> to the window. Not verified on Windows.

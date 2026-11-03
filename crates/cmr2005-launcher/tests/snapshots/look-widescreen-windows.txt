@@ -14,6 +14,6 @@ WIDTH = dword:2560
 HEIGHT = dword:1440
 
 [environment]
-REA_CLOSE_HOOK=class=PC_CMR5;strategy=terminate
+REA_CLOSE_HOOK=class=PC_CMR5;close_on=sc_close,alt_f4,alt_f4_state;strategy=terminate
 
 [file dxvk.conf: removed]
