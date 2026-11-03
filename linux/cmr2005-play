@@ -48,50 +48,28 @@ REA_WINEDBG_OFF=1                     # a fault ends the game, no hidden debugge
 REA_ORIGINAL_SIZE=640x480             # the game's own mode on its first start
 REA_SCALER_KEY=                       # no scaler option: gamescope's default
 REA_LEGACY_LOCK=off                   # no older helper wrote a pid-only lock
-REA_HELPER_KEYS="look resolution"     # --look/--resolution size gamescope too
+# The gamescope size each look gives (the launcher's Look::picture in
+# src/config.rs): Widescreen and Steam Deck the screen, inside which the
+# launcher picks its 16:9 size as it does on a real screen (1280x720 on a
+# Deck's 1280x800); Original the game's own mode. The library reads this
+# run's --look/--resolution, then launcher.cfg's, as the launcher does.
+REA_LOOK_SIZES="original=original widescreen=screen steam_deck=1280x800"
 # DXVK's d3d9 override is the launcher's (Wine's per-program key for
 # cmr5.exe): Wine ignores WINEDLLOVERRIDES in the game's environment.
 
-# The gamescope size a look gives (the launcher's Look::picture in
-# src/config.rs): Widescreen and Steam Deck the screen, inside which the
-# launcher picks its 16:9 size as it does on a real screen (1280x720 on a
-# Deck's 1280x800); Original the game's own mode.
-cmr2005_look_size() {
-  case $1 in
-    widescreen) rea_screen_size || echo 1920x1080 ;;
-    steam_deck) echo 1280x800 ;;
-    original) echo original ;;
-    *) return 1 ;;
-  esac
-}
-
 # --- game hooks --------------------------------------------------------------
 
-# A look fills the resolution its own source (launcher.cfg, or this run's
-# flags) left unset, and flags win over the file, as in the launcher. The
-# size goes into this run's values, which rea_game_size reads first.
+# No look and no resolution anywhere (no launcher.cfg yet, or one without
+# them): the launcher's first start saves the Widescreen look, so gamescope
+# gets its size too.
 rea_hook_before_start() {
   rea_wine_no_crash_dialog
-  [ -n "$(REA_CFG=; rea_get_key resolution)" ] && return 0
-  _cmr2005_size=
-  _cmr2005_look=$(REA_CFG=; rea_get_value look)
-  if [ -n "$_cmr2005_look" ]; then
-    _cmr2005_size=$(cmr2005_look_size "$_cmr2005_look") || _cmr2005_size=
-  fi
-  if [ -z "$_cmr2005_size" ] && [ -n "$REA_CFG" ] &&
-    [ -z "$(rea_get_key resolution "$REA_CFG")" ]; then
-    _cmr2005_look=$(rea_get_value look "$REA_CFG")
-    [ -n "$_cmr2005_look" ] && { _cmr2005_size=$(cmr2005_look_size "$_cmr2005_look") || _cmr2005_size=; }
-  fi
-  # No look and no resolution anywhere (no launcher.cfg yet): the
-  # launcher's first start saves the Widescreen look.
-  if [ -z "$_cmr2005_size" ] && [ -z "$_cmr2005_look" ] &&
-    { [ -z "$REA_CFG" ] || [ -z "$(rea_get_key resolution "$REA_CFG")" ]; }; then
-    _cmr2005_size=$(cmr2005_look_size widescreen)
-  fi
-  [ -n "$_cmr2005_size" ] || return 0
+  for _cmr2005_key in look resolution; do
+    [ -n "$(REA_CFG=; rea_get_key "$_cmr2005_key")" ] && return 0
+    [ -n "$REA_CFG" ] && [ -n "$(rea_get_key "$_cmr2005_key" "$REA_CFG")" ] && return 0
+  done
   REA_ONE_RUN="${REA_ONE_RUN:+$REA_ONE_RUN
-}resolution=$_cmr2005_size"
+}look=widescreen"
 }
 
 rea_init || exit 1

@@ -82,6 +82,25 @@ rm -f "$CFG"
 contains "no launcher.cfg: the first start's Widescreen look" "$(size)" "gamescope -W 1920 -H 1080"
 printf 'game = C:\\CMR\n' > "$CFG"
 contains "launcher.cfg without a look: Widescreen too" "$(size)" "gamescope -W 1920 -H 1080"
+echo "# on a 2560x1440 screen (xrandr's current mode)"
+mkdir -p "$T/bin"
+cat > "$T/bin/xrandr" <<'XR'
+#!/bin/sh
+echo "Screen 0: minimum 8 x 8, current 2560 x 1440, maximum 32767 x 32767"
+echo "   2560x1440     59.95*+"
+XR
+chmod +x "$T/bin/xrandr"
+wide() { PATH=$T/bin:$PATH size "$@"; }
+rm -f "$CFG"
+contains "no launcher.cfg: Widescreen fills the screen" "$(wide)" "gamescope -W 2560 -H 1440"
+printf 'look = widescreen\n' > "$CFG"
+contains "look widescreen: the screen" "$(wide)" "gamescope -W 2560 -H 1440"
+contains "--look original on that screen: 640x480" "$(wide --look original)" "gamescope -W 640 -H 480"
+printf 'look = steam_deck\nresolution = original\n' > "$CFG"
+contains "resolution original: the game's 640x480" "$(wide)" "gamescope -W 640 -H 480"
+contains "--resolution for one run" "$(wide --resolution 1600x900)" "gamescope -W 1600 -H 900"
+printf 'game = C:\\CMR\nfps_limit = 75\n' > "$CFG"
+contains "launcher.cfg without a look or resolution: the screen" "$(wide)" "gamescope -W 2560 -H 1440"
 sh "$T/repo/linux/cmr2005-play" stop > /dev/null 2>&1
 
 rm -f "$T/repo/CMR2005Launcher.exe"
