@@ -53,8 +53,7 @@ fn modes_follow_the_family_flags() {
         assert_eq!(mode(&[help]), Mode::Help);
     }
     let helper = parse(&["--settings", "--linux"]).unwrap();
-    assert!(helper.linux && !helper.interactive() && !helper.wants_console());
-    assert!(parse(&["--check"]).unwrap().wants_console());
+    assert!(helper.linux && !helper.interactive());
 }
 
 #[test]
@@ -202,4 +201,117 @@ fn the_program_says_it_is_for_windows() {
         .unwrap();
     assert_eq!(output.status.code(), Some(cli::USAGE_ERROR));
     assert!(String::from_utf8_lossy(&output.stderr).contains("Windows program"));
+}
+
+/// Who sees a message (`rea_launcher_win32::report`): `cmr2005-play`, the
+/// AppImage and Proton start the launcher with no console and stdout to a
+/// log, so a play-time error that is only printed never reaches the player.
+mod messages {
+    use super::parse;
+    use cmr2005_launcher::cli;
+    use rea_launcher_win32::report::{Mode, Route, Terminal, route};
+
+    const UNDER_HELPER: Terminal = Terminal {
+        attached: false,
+        redirected: true,
+        wine: true,
+    };
+
+    const BOTH: Route = Route {
+        print: true,
+        dialog: true,
+    };
+
+    fn routed(args: &[&str], wine: bool, terminal: Terminal) -> Route {
+        route(parse(args).unwrap().message_mode(wine), terminal)
+    }
+
+    #[test]
+    fn a_play_error_under_the_linux_helper_is_a_dialog_and_logged() {
+        // cmr2005-play's game run (one-run flags too), and a Proton start.
+        for run in [
+            &["--no-window"][..],
+            &["--no-window", "--look", "original"],
+            &[],
+        ] {
+            assert_eq!(routed(run, true, UNDER_HELPER), BOTH, "{run:?}");
+            assert!(matches!(
+                parse(run).unwrap().message_mode(true),
+                Mode::Play { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn the_helpers_window_run_stays_quiet() {
+        // `--settings --linux`: the helper reads the exit code.
+        let window = routed(&["--settings", "--linux"], true, UNDER_HELPER);
+        assert!(window.print && !window.dialog);
+    }
+
+    #[test]
+    fn check_help_and_bad_flags_never_block_a_script_under_wine() {
+        // `wine CMR2005Launcher.exe --check` from a terminal or a script,
+        // and `sdk/scripts/wine-test`: printed, never a modal dialog that
+        // nobody can answer.
+        let printed = Route {
+            print: true,
+            dialog: false,
+        };
+        for command in [&["--check"][..], &["--help"]] {
+            assert_eq!(routed(command, true, UNDER_HELPER), printed, "{command:?}");
+        }
+        assert_eq!(route(cli::usage_error_mode(true), UNDER_HELPER), printed);
+    }
+
+    #[test]
+    fn check_help_and_bad_flags_on_windows_show_a_dialog_only_when_unseen() {
+        let terminal = Terminal {
+            attached: true,
+            redirected: false,
+            wine: false,
+        };
+        let shortcut = Terminal {
+            attached: false,
+            redirected: false,
+            wine: false,
+        };
+        for command in [&["--check"][..], &["--help"]] {
+            let from_terminal = routed(command, false, terminal);
+            assert!(from_terminal.print && !from_terminal.dialog, "{command:?}");
+            assert!(routed(command, false, shortcut).dialog, "{command:?}");
+        }
+        assert!(!route(cli::usage_error_mode(false), terminal).dialog);
+        assert!(route(cli::usage_error_mode(false), shortcut).dialog);
+    }
+
+    #[test]
+    fn a_windows_script_with_no_window_never_gets_a_dialog() {
+        let redirected = Terminal {
+            attached: false,
+            redirected: true,
+            wine: false,
+        };
+        assert!(!routed(&["--no-window"], false, redirected).dialog);
+        // A double-clicked shortcut with a flag is a person.
+        let nothing = Terminal {
+            attached: false,
+            redirected: false,
+            wine: false,
+        };
+        assert!(routed(&["--look", "original"], false, nothing).dialog);
+    }
+
+    /// Under Wine (`sdk/scripts/wine-test` pipes stdout as cmr2005-play
+    /// does): the game run's error would reach the player as a dialog.
+    #[cfg(windows)]
+    #[test]
+    fn under_wine_the_game_run_error_is_a_dialog() {
+        use rea_launcher_win32::{report, wine};
+        if !wine::is_wine() {
+            return;
+        }
+        let mode = parse(&["--no-window"]).unwrap().message_mode(true);
+        assert!(report::route_here(mode).dialog);
+    }
 }

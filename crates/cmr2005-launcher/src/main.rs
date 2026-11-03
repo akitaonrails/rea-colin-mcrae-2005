@@ -32,11 +32,11 @@ mod app {
     use rea_launcher::ledger::{Ledger, Outcome};
     use rea_launcher::log::Log;
     use rea_launcher::{cfg, fsx, paths};
-    use rea_launcher_win32::console::{self, Output};
     use rea_launcher_win32::dialog::{self, Icon};
     use rea_launcher_win32::instance::{self, Window};
     use rea_launcher_win32::process::Launch;
     use rea_launcher_win32::reg::Key;
+    use rea_launcher_win32::report;
     use rea_launcher_win32::{disk, display, gpu, wine};
 
     /// The single-instance name (a named mutex per user session).
@@ -64,21 +64,26 @@ mod app {
         }
     }
 
-    /// Where messages go: the starting terminal, a dialog when a person
-    /// started it without one, or only `launcher.log`.
+    /// Where messages go (`Invocation::message_mode`): printed (the
+    /// terminal, or the log `cmr2005-play`, the AppImage and Proton keep),
+    /// and a dialog whenever a person may be watching a play-time error.
     struct Out {
         log: Log,
-        attached: bool,
-        interactive: bool,
+        mode: report::Mode,
     }
 
     impl Out {
         fn say(&self, text: &str, icon: Icon) {
-            match console::output(self.attached, console::stdout_usable(), self.interactive) {
-                Output::Terminal if icon == Icon::Info => println!("{text}"),
-                Output::Terminal => eprintln!("{text}"),
-                Output::Dialog => dialog::message(TITLE, text, icon),
-                Output::Nowhere => {}
+            let route = report::route_here(self.mode);
+            if route.print {
+                if icon == Icon::Info {
+                    println!("{text}");
+                } else {
+                    eprintln!("{text}");
+                }
+            }
+            if route.dialog {
+                dialog::message(TITLE, text, icon);
             }
         }
 
@@ -91,18 +96,11 @@ mod app {
         let log = Log::new(home().join("launcher.log"));
         log.line(concat!("CMR2005Launcher ", env!("CARGO_PKG_VERSION")));
         let parsed = cli::parse(std::env::args().skip(1));
-        let (attached, interactive) = match &parsed {
-            Ok(invocation) => (
-                invocation.wants_console() && console::attach_parent(),
-                invocation.interactive(),
-            ),
-            Err(_) => (console::attach_parent(), true),
+        let mode = match &parsed {
+            Ok(invocation) => invocation.message_mode(wine::is_wine()),
+            Err(_) => cli::usage_error_mode(wine::is_wine()),
         };
-        let out = Out {
-            log,
-            attached,
-            interactive,
-        };
+        let out = Out { log, mode };
         let invocation = match parsed {
             Ok(invocation) => invocation,
             Err(error) => {

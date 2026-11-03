@@ -5,6 +5,14 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Fixed
+
+- Under `cmr2005-play`, the AppImage and Proton, an error when Play
+  starts the game (the game folder is gone, an unknown `cmr5.exe`) is now
+  shown in a dialog. Before, it only went to `play.log` and the game
+  simply never appeared. It is still printed for the log as well
+  (rea-launcher-sdk's `report` rule).
+
 ## [0.1.0] - 2026-11-02
 
 ### Added

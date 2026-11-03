@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use rea_launcher::cfg::ArgError;
 use rea_launcher::paths;
+use rea_launcher_win32::report;
 
 use crate::config::{self, Settings};
 use crate::edition;
@@ -41,22 +42,50 @@ pub struct Invocation {
     pub mode: Mode,
     /// Started by the Linux helper (`--linux`): never show a dialog.
     pub linux: bool,
+    /// `--no-window`: on Windows usually a script.
+    pub no_window: bool,
     /// The settings the flags set, to go on top of `launcher.cfg`.
     pub flags: Settings,
 }
 
 impl Invocation {
-    /// Whether output goes to the terminal that started the launcher
-    /// (`--help`, `--check`, `--no-window`); the window shows its own.
-    pub fn wants_console(&self) -> bool {
-        !matches!(self.mode, Mode::Window { .. })
-    }
-
     /// Whether a person may be watching: messages may become dialogs when
     /// there is no terminal. Never for the Linux helper's runs.
     pub fn interactive(&self) -> bool {
         !self.linux
     }
+
+    /// How `rea_launcher_win32::report` routes this run's messages
+    /// (`wine`: running under Wine).
+    ///
+    /// Play time (the window, the game run): an error is a dialog whenever
+    /// a person may be watching, and printed for the log as well.
+    /// `--no-window` counts as a script on Windows, but not under Wine:
+    /// `cmr2005-play`'s game run, the AppImage and Proton start the
+    /// launcher for a player in front of the screen, and its stdout goes
+    /// to a log nobody reads. The helper's window run (`--linux`) stays
+    /// quiet: the helper reads its exit code.
+    ///
+    /// `--help` and `--check` are commands: printed, and a dialog only on
+    /// Windows when nothing printed can be seen. Under Wine they are only
+    /// printed, so a script or `sdk/scripts/wine-test` never waits on a
+    /// dialog nobody can answer.
+    pub fn message_mode(&self, wine: bool) -> report::Mode {
+        match self.mode {
+            Mode::Help | Mode::Check => report::Mode::Command {
+                interactive: self.interactive() && !wine,
+            },
+            Mode::Window { .. } | Mode::Play => report::Mode::Play {
+                interactive: self.interactive() && (wine || !self.no_window),
+            },
+        }
+    }
+}
+
+/// How a bad command line's message is routed: as a command's
+/// ([`Invocation::message_mode`]).
+pub fn usage_error_mode(wine: bool) -> report::Mode {
+    report::Mode::Command { interactive: !wine }
 }
 
 /// Reads the command line (without the program name). The error is the
@@ -69,6 +98,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, Strin
             return Ok(Invocation {
                 mode: Mode::Help,
                 linux: false,
+                no_window: false,
                 flags: Settings::default(),
             });
         }
@@ -99,6 +129,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, Strin
     Ok(Invocation {
         mode,
         linux: has("--linux"),
+        no_window: has("--no-window"),
         flags,
     })
 }
