@@ -21,6 +21,9 @@ pub const USAGE_ERROR: i32 = 2;
 pub const WINDOW_CLOSED: i32 = 3;
 /// `--settings`: no window could be made (the helper then plays anyway).
 pub const WINDOW_UNAVAILABLE: i32 = 4;
+/// A second start that did nothing: the game or another launcher run holds
+/// the instance (`rea_launcher_win32::instance::ALREADY_RUNNING`).
+pub const ALREADY_RUNNING: i32 = rea_launcher_win32::instance::ALREADY_RUNNING;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {

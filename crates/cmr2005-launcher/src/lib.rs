@@ -15,6 +15,15 @@
 //! - [`plan`]: everything one launch changes, for `main` and the tests.
 //! - `palette`, `ui`: the settings window (Windows, and the host's tests).
 
+/// The settings window's title. It differs from the game's own window
+/// title ("Colin McRae Rally 2005"): a second start brings this window
+/// forward (`rea_launcher_win32::instance::Window::Own`), never the game's.
+pub const WINDOW_TITLE: &str = "Colin McRae Rally 2005 Launcher";
+
+/// The single-instance name: one launcher at a time per user session (a
+/// named mutex on Windows, per prefix under Wine).
+pub const INSTANCE: &str = "cmr2005";
+
 pub mod cli;
 pub mod components;
 pub mod config;

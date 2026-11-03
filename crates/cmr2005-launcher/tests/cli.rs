@@ -377,3 +377,57 @@ mod messages {
         assert!(report::route_here(mode).dialog);
     }
 }
+
+/// One launcher at a time (STANDARDS "One instance"): a second start brings
+/// the settings window forward, found by its own title in a process running
+/// this exe (`instance::Window::Own`), else says the game is running and
+/// exits 5, which `cmr2005-play` reads as "already running".
+mod second_start {
+    use super::parse;
+    use cmr2005_launcher::{WINDOW_TITLE, cli};
+    use rea_launcher_win32::instance::{self, SecondStart};
+
+    #[test]
+    fn only_check_is_an_action() {
+        assert!(parse(&["--check"]).unwrap().is_action());
+        for args in [&[][..], &["--no-window"], &["--settings", "--linux"]] {
+            assert!(!parse(args).unwrap().is_action(), "{args:?}");
+        }
+    }
+
+    #[test]
+    fn a_refused_second_start_exits_5() {
+        assert_eq!(cli::ALREADY_RUNNING, 5);
+        assert_eq!(cli::ALREADY_RUNNING, instance::ALREADY_RUNNING);
+        assert_eq!(SecondStart::Busy.exit_code(), cli::ALREADY_RUNNING);
+        assert_eq!(SecondStart::Focused.exit_code(), cli::OK);
+        let busy = SecondStart::Busy.message("Colin McRae Rally 2005").unwrap();
+        assert!(busy.contains("already running"), "{busy}");
+    }
+
+    #[test]
+    fn the_window_title_is_not_the_games() {
+        // The game's window is "Colin McRae Rally 2005"; a second start
+        // must never take it for the launcher's window.
+        assert_eq!(WINDOW_TITLE, "Colin McRae Rally 2005 Launcher");
+        assert!(instance::is_own_window(
+            WINDOW_TITLE,
+            WINDOW_TITLE,
+            r"C:\Launcher\CMR2005Launcher.exe",
+            "cmr2005launcher.exe"
+        ));
+        assert!(!instance::is_own_window(
+            "Colin McRae Rally 2005",
+            WINDOW_TITLE,
+            r"C:\Launcher\CMR2005Launcher.exe",
+            "CMR2005Launcher.exe"
+        ));
+        // The game's window, whatever its title.
+        assert!(!instance::is_own_window(
+            WINDOW_TITLE,
+            WINDOW_TITLE,
+            r"C:\users\player\AppData\Local\CMR2005Launcher\runtime\cmr5.exe",
+            "CMR2005Launcher.exe"
+        ));
+    }
+}

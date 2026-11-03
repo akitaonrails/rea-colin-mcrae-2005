@@ -28,19 +28,16 @@ mod app {
     use cmr2005_launcher::registry::{self, RegValue};
     use cmr2005_launcher::saves::{self, Folders};
     use cmr2005_launcher::source::{self, Source};
-    use cmr2005_launcher::{config, edition, plan, runtime, ui};
+    use cmr2005_launcher::{INSTANCE, WINDOW_TITLE, config, edition, plan, runtime, ui};
     use rea_launcher::ledger::{Ledger, Outcome};
     use rea_launcher::log::Log;
     use rea_launcher::{cfg, fsx, paths};
     use rea_launcher_win32::dialog::{self, Icon};
-    use rea_launcher_win32::instance::{self, Window};
-    use rea_launcher_win32::process::Launch;
+    use rea_launcher_win32::instance::{self, SecondStart, Window};
+    use rea_launcher_win32::process::{self, Launch};
     use rea_launcher_win32::reg::Key;
     use rea_launcher_win32::report;
     use rea_launcher_win32::{disk, display, gpu, wine};
-
-    /// The single-instance name (a named mutex per user session).
-    const INSTANCE: &str = "cmr2005";
 
     const TITLE: &str = "Colin McRae Rally 2005";
 
@@ -127,21 +124,18 @@ mod app {
             out.say(&config::usage(), Icon::Info);
             return Ok(cli::OK);
         }
-        // Held until the game exits: a second start brings the window
-        // forward, or says the game is running; an action flag is refused.
+        // Held until the game exits: a second start brings the settings
+        // window forward, or says the game is running and exits 5.
         let instance = match instance::single(INSTANCE) {
             Ok(guard) => guard,
             Err(running) => {
-                if invocation.mode == Mode::Check {
-                    return Err(
-                        "The launcher is already open; close it first, or use its window.".into(),
-                    );
+                let second =
+                    running.second_start(invocation.is_action(), Window::Own(WINDOW_TITLE));
+                out.log.line(second.log_line());
+                if let Some(text) = second.message(TITLE) {
+                    out.say(&text, Icon::Error);
                 }
-                if !running.bring_to_front(Window::Title(TITLE)) {
-                    out.say("Colin McRae Rally 2005 is already running.", Icon::Info);
-                }
-                out.log.line("second start: another launcher is running");
-                return Ok(cli::OK);
+                return Ok(second.exit_code());
             }
         };
         let path = settings_path();
@@ -221,6 +215,14 @@ mod app {
         }
 
         let folders = Folders::new(&home(), settings.runtime.as_deref());
+        // A launcher that was killed released the instance, but its game
+        // may still run from the runtime copy: never prepare under it.
+        if !process::find_running(&folders.runtime.join(edition::GAME_EXE)).is_empty() {
+            let busy = SecondStart::Busy;
+            out.log.line(busy.log_line());
+            out.say(&busy.message(TITLE).unwrap_or_default(), Icon::Error);
+            return Ok(busy.exit_code());
+        }
         let game_dir = match &source {
             Source::Installed { dir, .. } => dir.clone(),
             Source::Installer(installer) => {

@@ -462,10 +462,10 @@ mod app {
         let scale = display::wine_dpi_scale();
         let screen = display::screen_size();
         let fit = WindowFit::new(SIZE, wine::is_wine(), screen, scale).with_native_fit(true);
-        let options = fit.native_options("Colin McRae Rally 2005");
+        let options = fit.native_options(crate::WINDOW_TITLE);
         let mut outcome = None;
         eframe::run_native(
-            "Colin McRae Rally 2005",
+            crate::WINDOW_TITLE,
             options,
             Box::new(|cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
@@ -530,11 +530,11 @@ mod app {
         let scale = display::wine_dpi_scale();
         let screen = display::screen_size();
         let fit = WindowFit::new(SIZE, wine::is_wine(), screen, scale).with_native_fit(true);
-        let options = fit.native_options("Colin McRae Rally 2005");
+        let options = fit.native_options(crate::WINDOW_TITLE);
         let text = saved.map_or_else(|| config::first_run_text(screen), str::to_owned);
         let mut outcome = Outcome::Closed;
         eframe::run_native(
-            "Colin McRae Rally 2005",
+            crate::WINDOW_TITLE,
             options,
             Box::new(|cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
