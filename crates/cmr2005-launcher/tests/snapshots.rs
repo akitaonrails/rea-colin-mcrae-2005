@@ -1,30 +1,21 @@
 //! Golden snapshots (docs/STANDARDS.md, "Golden snapshots"): `--help`, the
 //! `launcher.cfg` template, and what a launch does for each look and a few
 //! option mixes (`plan::plan`). A difference fails; review it like code.
-//! `CMR2005_UPDATE_SNAPSHOTS=1 cargo test --test snapshots` rewrites them.
+//! `CMR2005_UPDATE_SNAPSHOTS=1 cargo test --test snapshots` (or
+//! `REA_UPDATE_SNAPSHOTS=1`) rewrites them.
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use cmr2005_launcher::config::{self, Look, Settings};
 use cmr2005_launcher::plan;
 
+/// `rea_launcher::snapshot!` with this launcher's own update variable kept
+/// (`REA_UPDATE_SNAPSHOTS=1` works too). The crate's version is stored as
+/// `<version>`, so a release bump never breaks a snapshot.
 fn check(name: &str, actual: &str) {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/snapshots")
-        .join(name);
-    if std::env::var_os("CMR2005_UPDATE_SNAPSHOTS").is_some() {
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, actual).unwrap();
-        return;
-    }
-    let expected = fs::read_to_string(&path).unwrap_or_else(|_| {
-        panic!(
-            "no snapshot {}: run with CMR2005_UPDATE_SNAPSHOTS=1",
-            path.display()
-        )
-    });
-    assert_eq!(expected, actual, "snapshot {name} changed");
+    rea_launcher::snapshots!()
+        .update_var("CMR2005_UPDATE_SNAPSHOTS")
+        .assert(name, actual);
 }
 
 const RUNTIME: &str = r"C:\users\player\AppData\Local\CMR2005Launcher\runtime";
@@ -49,8 +40,7 @@ fn launch(name: &str, flags: &[&str], screen: (u32, u32), wine: bool) {
 
 #[test]
 fn help_and_template() {
-    let help = config::usage().replace(env!("CARGO_PKG_VERSION"), "<version>");
-    check("help.txt", &help);
+    check("help.txt", &config::usage());
     check("template.cfg", &config::template());
     check(
         "first-run-1080p.cfg",
