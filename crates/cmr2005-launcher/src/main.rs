@@ -33,11 +33,12 @@ mod app {
     use rea_launcher::log::Log;
     use rea_launcher::{cfg, fsx, paths};
     use rea_launcher_win32::dialog::{self, Icon};
+    use rea_launcher_win32::gpu::{self, Glx};
     use rea_launcher_win32::instance::{self, SecondStart, Window};
     use rea_launcher_win32::process::{self, Launch};
     use rea_launcher_win32::reg::Key;
     use rea_launcher_win32::report;
-    use rea_launcher_win32::{disk, display, gpu, wine};
+    use rea_launcher_win32::{disk, display, wine};
 
     const TITLE: &str = "Colin McRae Rally 2005";
 
@@ -139,27 +140,28 @@ mod app {
             }
         };
         let path = settings_path();
-        if wine::is_wine() && invocation.mode != Mode::Check {
-            match gpu::prefer_glx() {
-                Ok(true) => {
-                    // Wine chose EGL when this process started; on EGL the
-                    // window's OpenGL setup fails (a fresh prefix's first
-                    // start). The setting counts from the next process, so
-                    // run again; that one finds it set and goes on.
-                    out.log.line(
-                        "settings window: OpenGL through GLX (UseEGL=N); starting again to use it",
-                    );
-                    let exe = std::env::current_exe()
-                        .map_err(|error| format!("Cannot find the launcher: {error}"))?;
-                    // The next process takes the single-instance lock.
-                    drop(instance);
-                    let code = Launch::new(&exe).args(std::env::args().skip(1)).run()?;
-                    return Ok(code as i32);
+        // A fresh Wine prefix draws eframe windows through EGL, which fails
+        // on many drivers: switch it to GLX and run once more, so the first
+        // start already gets the settings window (or the unpack window of
+        // a --no-window first start).
+        // `None` only when starting again failed after the lock was let go.
+        let instance = if invocation.mode == Mode::Check {
+            Some(instance)
+        } else {
+            match gpu::prefer_glx_or_restart(Some(instance)) {
+                Glx::Restarted { exit_code } => {
+                    out.log
+                        .line("windows: OpenGL through GLX (UseEGL=N) set on a fresh prefix, started again");
+                    return Ok(exit_code as i32);
                 }
-                Ok(false) => {}
-                Err(error) => out.warn(&error.to_string()),
+                Glx::Ready { instance, warning } => {
+                    if let Some(warning) = warning {
+                        out.warn(&warning);
+                    }
+                    instance
+                }
             }
-        }
+        };
         if let Mode::Window { settings_only } = invocation.mode {
             let saved = cfg::read_file(&path).ok().flatten();
             match ui::show(&path, saved.as_deref(), invocation.linux) {
