@@ -22,11 +22,13 @@ Status: ✅ verified · ⚠️ partly (see notes) · ❌ fails · — not yet ch
 
 | Option / look | Window → `launcher.cfg` → game file | Effect seen in game | Notes |
 |---|---|---|---|
-| Look: Original | — | — | |
-| Look: Recommended | — | — | |
-| Look: Steam Deck | — | — | device check pending |
-| `resolution` (example) | — | — | |
-| `vsync` (example) | — | — | |
+| Look: Original | ✅ window card → `look = original`, `resolution = original` → only `INSTALL_PATH`/`SAVEGAME_PATH` written (v12) | — | |
+| Look: Widescreen | ✅ `launcher.cfg` → window card selected (v10); `WIDTH`/`HEIGHT` 1920×1080 + `WIDESCREENDISPLAY` (v01–v05) | ✅ r08, e06 | |
+| Look: Steam Deck | ⚠️ window card → selected, its values shown (v10) | — | device check pending |
+| `resolution` | ✅ typed 1600x900 → `resolution = 1600x900` → `WIDTH`/`HEIGHT` 1600×900; back into the window (v10, v11) | ✅ r05, r08 | |
+| `fps_limit` | ✅ value box 75 → `fps_limit = 75` → `dxvk.conf` `d3d9.maxFrameRate = 75` (v10, v11) | ✅ r15 (45 fps cap) | |
+| `vsync` | ✅ switch off → `vsync = off` → `d3d9.presentInterval = 0` (v10, v11) | ✅ r16 (on: 59.9 fps) | |
+| `game` | ✅ typed `Z:\…\extract\app` → `game = …`, "Found PC v1.1 (GOG)" (v12) | — | Browse… opens Wine's folder picker (v09) |
 
 ### Platforms
 
@@ -36,8 +38,8 @@ Status: ✅ verified · ⚠️ partly (see notes) · ❌ fails · — not yet ch
 | Windows 10 | — | |
 | Proton, without our Linux helper (Steam, non-Steam game) | — | |
 | Linux AppImage (portable Wine) | — | |
-| Linux, `linux/cmr2005-play` with system Wine | — | |
-| Steam Deck, Game Mode (controller, 1280×800, suspend/resume) | — | |
+| Linux, `linux/cmr2005-play` with system Wine | ⚠️ headless gamescope only (h01–h02, v01–v12) | every way of quitting ends everything; play-time errors are dialogs |
+| Steam Deck, Game Mode (controller, 1280×800, suspend/resume) | — | the helper inside an existing gamescope (no nested one) ran the window and the game headless (v10–v12) |
 | Multi-monitor | — | |
 | HiDPI / 4K | — | |
 | Ultrawide | — | |
@@ -220,11 +222,57 @@ headless prefix (w06): the log shows the restart and the window opens.
   DirectInput; it caused no stall in these runs. Candidates if it comes
   back: Wine's sound path for co-driver calls; Xidi for the pad.
 
+### 2026-11-02: quitting, the settings window and play-time errors (dev package)
+
+Release i686 build packaged with `packaging/package.sh --no-appimage`,
+Wine 11.21 and gamescope 3.17.0 in the `gaming` distrobox, every run started
+from `env -i`, a private PipeWire null sink (WirePlumber's device monitors
+off in the test HOME), throwaway prefixes `.work/realgame/prefix-v1..3`, the
+game from `innoextract` of the owner's GOG installer into `.work/extract`.
+Harness: `.work/realgame/bin/vhelper.sh` (the helper's `--play` with its own
+gamescope, made headless by a wrapper on `PATH`) and `vouter.sh` (the helper
+inside one headless gamescope, as in Game Mode: it starts no gamescope of its
+own). Input through XTest; evidence is screenshots, logs and the process table.
+After every run the table was checked by environment (`WINEPREFIX`,
+`XDG_RUNTIME_DIR`, match only), by recorded session and by name, zombies
+included; none of these runs left anything. (A `wineserver` and `explorer.exe`
+listed by name in v04–v08 belonged to `sdk/scripts/wine-test`'s prefix,
+running at the same time.)
+
+**Every way of quitting under `cmr2005-play`:**
+
+| Run | How | Result |
+|---|---|---|
+| v01, v02 | the game's menu: Exit → Yes (main menu, one Left from Challenges) | the game exited with 0; launcher, helper and gamescope gone; nothing left |
+| v10 | the same, the helper inside gamescope | game, launcher and session gone within about 1 s of Yes; helper exit 0 |
+| v03 | TERM to the helper's gamescope (gamescope closed) | everything gone in 0.9 s (helper exit 139: gamescope's segfault on exit) |
+| v04 | SIGINT to the helper's pid | everything gone in 0.6 s (exit 143) |
+| v05 | SIGTERM to the helper's pid | everything gone in 0.5 s (exit 143) |
+| v12 | `cmr2005-play stop`, the helper inside gamescope | everything gone within 1 s (exit 143) |
+
+**The settings window in the real Wine run** (the helper's default command,
+window then game):
+
+| Run | What | Result |
+|---|---|---|
+| v09 | fresh prefix | the launcher restarts once for GLX (`UseEGL=N`), then the window opens (880×640); Play stays disabled until a game is found; Browse… opens Wine's "Browse for Folder"; closing the window: "settings window closed without Play; nothing started", no `launcher.cfg` written, nothing left |
+| v10 | `launcher.cfg` with the game, Widescreen, 1920x1080, 0, on | shown in the window ("Found PC v1.1 (GOG)", Widescreen selected); Steam Deck card, then Resolution 1600x900, Frame-rate cap 75, VSync off; Play: `launcher.cfg` has `resolution = 1600x900`, `fps_limit = 75`, `vsync = off` (editing the picture clears `look`, as designed); the game started 16 s later with `WIDTH`/`HEIGHT` 1600×900, `WIDESCREENDISPLAY` and `dxvk.conf` `d3d9.maxFrameRate = 75`, `d3d9.presentInterval = 0` |
+| v11 | reopened | the Picture tab shows 1600x900, 75 and VSync off; closed without Play, nothing left |
+| v12 | fresh prefix, folder typed | `Z:\…\extract\app` typed into the field → "Found PC v1.1 (GOG)"; Original card; Play: `game`, `look = original`, `resolution = original`, `fps_limit = 0`, `vsync = off` saved; the game started |
+
+**Play-time errors under `cmr2005-play --play`** (`launcher.cfg` naming a
+missing folder, then a folder whose `cmr5.exe` is random bytes):
+
+| Run | Build | Result |
+|---|---|---|
+| v06-old, v07-old | before the fix | **no dialog**: the launcher printed the error into `play.log` and ended, so the game simply never appeared |
+| v06, v07 | the fix (`report`, see CHANGELOG; rerun with the committed build) | a dialog: "There is no folder Z:\…\no-such-folder." and the unknown-`cmr5.exe` refusal with its SHA-256 and the issue link; also in `play.log`; `cmr2005-play stop` while it shows ends everything |
+| v08 | the fix, Enter on OK | launcher, helper and gamescope gone; nothing left |
+
 ### Not verified yet
 
 - Sound on real speakers beyond what the owner heard while playing.
 - Sound output (it went to the null sink; no errors, nothing measured).
 - Driving a stage (car physics at different frame rates).
-- The game's own Quit, gamescope closed by itself.
-- The settings window (only `--no-window` was run).
+- The settings window on a real desktop (only headless gamescope so far), and with a gamepad.
 - Windows: how the launcher provides the registry values without admin rights.

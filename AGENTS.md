@@ -90,5 +90,7 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   through the VirtualStore, no admin. Never use the "64-bit patch" (it
   restores StarForce's `protect.dll`).
 - **Known problems and their status:** startup crash fixed (verified to the
-  menus, headless). Intro videos/music, sound, a stage, saves, widescreen,
-  DXVK, controllers and quitting are not verified yet (`docs/RUNTIME_NOTES.md`).
+  menus, headless). Verified headless: intro videos, a stage, saves,
+  16:9 widescreen, DXVK, every way of quitting under `cmr2005-play`, the
+  settings window under Wine and play-time error dialogs. Sound, driving
+  and controllers are not verified yet (`docs/RUNTIME_NOTES.md`).
