@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use rea_launcher::cfg::ArgError;
 use rea_launcher::paths;
-use rea_launcher_win32::report;
+use rea_launcher_win32::report::{Audience, Run};
 
 use crate::config::{self, Settings};
 use crate::edition;
@@ -40,65 +40,88 @@ pub enum Mode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Invocation {
     pub mode: Mode,
-    /// Started by the Linux helper (`--linux`): never show a dialog.
+    /// Started by the Linux helper (`--linux`).
     pub linux: bool,
-    /// `--no-window`: on Windows usually a script.
+    /// `--no-window` was given (a script on native Windows; the helper's
+    /// game run under Wine).
     pub no_window: bool,
     /// The settings the flags set, to go on top of `launcher.cfg`.
     pub flags: Settings,
 }
 
 impl Invocation {
-    /// Whether a person may be watching: messages may become dialogs when
-    /// there is no terminal. Never for the Linux helper's runs.
-    pub fn interactive(&self) -> bool {
-        !self.linux
+    /// The family flags of this run, for the SDK's audience rule.
+    pub fn run(&self) -> Run {
+        Run {
+            command: matches!(self.mode, Mode::Help | Mode::Check),
+            no_window: self.no_window,
+            settings_only: self.mode
+                == (Mode::Window {
+                    settings_only: true,
+                }),
+            linux: self.linux,
+        }
     }
 
-    /// How `rea_launcher_win32::report` routes this run's messages
-    /// (`wine`: running under Wine).
+    /// Who may see this run's messages (`wine`: running under Wine): the
+    /// SDK's [`Audience::of`] (STANDARDS "Messages reach the player").
+    /// Play time (the window, the game run) is the SDK's rule as is: under
+    /// Wine `cmr2005-play`'s `--no-window` game run, the AppImage and
+    /// Proton get a dialog for an error, and it is printed for the log.
+    /// The window run of the helper (`--settings --linux`) shows none.
     ///
-    /// Play time (the window, the game run): an error is a dialog whenever
-    /// a person may be watching, and printed for the log as well.
-    /// `--no-window` counts as a script on Windows, but not under Wine:
-    /// `cmr2005-play`'s game run, the AppImage and Proton start the
-    /// launcher for a player in front of the screen, and its stdout goes
-    /// to a log nobody reads. The helper's window run (`--linux`) stays
-    /// quiet: the helper reads its exit code.
-    ///
-    /// `--help` and `--check` are commands: printed, and a dialog only on
-    /// Windows when nothing printed can be seen. Under Wine they are only
-    /// printed, so a script or `sdk/scripts/wine-test` never waits on a
-    /// dialog nobody can answer.
-    pub fn message_mode(&self, wine: bool) -> report::Mode {
-        match self.mode {
-            Mode::Help | Mode::Check => report::Mode::Command {
-                interactive: self.interactive() && !wine,
-            },
-            Mode::Window { .. } | Mode::Play => report::Mode::Play {
-                interactive: self.interactive() && (wine || !self.no_window),
-            },
-        }
+    /// One narrowing, see [`commands_print_only`]: `--help` and `--check`
+    /// under Wine are only printed.
+    pub fn audience(&self, wine: bool) -> Audience {
+        commands_print_only(Audience::of(self.run(), wine), wine)
+    }
+
+    /// Whether the run does work without the window (`--check`): a second
+    /// start then never brings the open window forward and exits non-zero.
+    pub fn is_action(&self) -> bool {
+        self.mode == Mode::Check
     }
 }
 
-/// How a bad command line's message is routed: as a command's
-/// ([`Invocation::message_mode`]).
-pub fn usage_error_mode(wine: bool) -> report::Mode {
-    report::Mode::Command { interactive: !wine }
+/// A command's output (`--help`, `--check`, a bad command line) under Wine
+/// is printed and never a dialog: `wine CMR2005Launcher.exe --check` from a
+/// script or `sdk/scripts/wine-test` must not wait on a dialog nobody can
+/// answer (docs/RUNTIME_NOTES.md, play-time errors). The SDK's rule would
+/// show one under Wine when no console is attached; the difference is
+/// recorded for rea-launcher-sdk in docs/CONTRIBUTIONS.md.
+fn commands_print_only(audience: Audience, wine: bool) -> Audience {
+    if audience.command && wine {
+        Audience {
+            interactive: false,
+            ..audience
+        }
+    } else {
+        audience
+    }
+}
+
+/// Who sees the message for a command line that did not parse: it is
+/// answered like a command ([`Invocation::audience`]), from the flags it
+/// has (`args` without the program name).
+pub fn usage_error_audience<S: AsRef<str>>(args: &[S], wine: bool) -> Audience {
+    let run = Run {
+        command: true,
+        ..Run::from_args(args, &[])
+    };
+    commands_print_only(Audience::of(run, wine), wine)
 }
 
 /// Reads the command line (without the program name). The error is the
 /// message for the player.
 pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Invocation, String> {
     let args: Vec<String> = args.into_iter().collect();
-    let (flags, switches) = match config::parse_args(args) {
+    let (flags, switches) = match config::parse_args(args.clone()) {
         Ok(parsed) => parsed,
         Err(ArgError::Help(_)) => {
             return Ok(Invocation {
                 mode: Mode::Help,
-                linux: false,
-                no_window: false,
+                linux: args.iter().any(|arg| arg == "--linux"),
+                no_window: args.iter().any(|arg| arg == "--no-window"),
                 flags: Settings::default(),
             });
         }

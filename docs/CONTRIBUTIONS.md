@@ -13,6 +13,7 @@ reviews and posts. Only fixes verified in the real game.
 | WineHQ AppDB, version 6421 (test report) | What works under Wine 11.21 | `RUNTIME_NOTES.md` | draft |
 | rea-launcher-sdk (issue) | Light palettes: the theme leaves egui's dark widget fills | `src/palette.rs::light_widgets` and its test | draft |
 | rea-launcher-sdk (issue) | Close hook: Alt+F4 never reaches a game with an exclusive DirectInput keyboard | `RUNTIME_NOTES.md` e06, e09 | draft |
+| rea-launcher-sdk (issue) | `report::Audience`: `--help`/`--check` under Wine become a dialog, so a script waits on it | `src/cli.rs::commands_print_only` and its tests | draft |
 
 ## Drafts
 
@@ -97,3 +98,18 @@ its installer (copied, or unpacked with innoextract).
 > `close_on = alt_f4_state` option, where the hook checks
 > `GetAsyncKeyState(VK_MENU)` and `VK_F4` on each message it sees, would
 > cover such games. Not verified on Windows.
+
+### rea-launcher-sdk issue: commands under Wine and dialogs
+
+> `report::Audience::of` makes a command (`--help`, `--check`, a bad
+> command line) interactive under Wine unless `--linux` is given, and
+> `route` then shows a dialog because Wine's stdout never counts as seen.
+> `wine CMR2005Launcher.exe --check` from a script, or the launcher's own
+> program tests under `sdk/scripts/wine-test`, then wait on a message box
+> nobody answers (the template avoids it by adding `--linux` to its program
+> tests). CMR2005 verified and keeps "commands under Wine are only
+> printed" (`src/cli.rs::commands_print_only`, on top of the SDK's
+> audience). The case for the SDK's rule: a `--check` added to Proton's
+> launch options prints into a log nobody reads. Proposal: decide it in
+> the SDK, e.g. a `Run::script` flag or a documented rule for commands
+> under Wine, so launchers stop choosing differently.

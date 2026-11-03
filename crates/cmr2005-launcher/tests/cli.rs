@@ -53,7 +53,7 @@ fn modes_follow_the_family_flags() {
         assert_eq!(mode(&[help]), Mode::Help);
     }
     let helper = parse(&["--settings", "--linux"]).unwrap();
-    assert!(helper.linux && !helper.interactive());
+    assert!(helper.linux);
 }
 
 #[test]
@@ -203,13 +203,14 @@ fn the_program_says_it_is_for_windows() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("Windows program"));
 }
 
-/// Who sees a message (`rea_launcher_win32::report`): `cmr2005-play`, the
-/// AppImage and Proton start the launcher with no console and stdout to a
-/// log, so a play-time error that is only printed never reaches the player.
+/// Who sees a message (`rea_launcher_win32::report::Audience`, from the
+/// parsed flags): `cmr2005-play`, the AppImage and Proton start the
+/// launcher with no console and stdout to a log, so a play-time error that
+/// is only printed never reaches the player.
 mod messages {
     use super::parse;
     use cmr2005_launcher::cli;
-    use rea_launcher_win32::report::{Mode, Route, Terminal, route};
+    use rea_launcher_win32::report::{Audience, Mode, Route, Run, Terminal, route};
 
     const UNDER_HELPER: Terminal = Terminal {
         attached: false,
@@ -223,7 +224,56 @@ mod messages {
     };
 
     fn routed(args: &[&str], wine: bool, terminal: Terminal) -> Route {
-        route(parse(args).unwrap().message_mode(wine), terminal)
+        route(parse(args).unwrap().audience(wine).mode(), terminal)
+    }
+
+    fn bad_line(args: &[&str], wine: bool) -> Mode {
+        cli::usage_error_audience(args, wine).mode()
+    }
+
+    #[test]
+    fn the_runs_are_the_family_flags() {
+        let run = |args: &[&str]| parse(args).unwrap().run();
+        assert_eq!(
+            run(&["--settings", "--linux"]),
+            Run {
+                settings_only: true,
+                linux: true,
+                ..Run::default()
+            }
+        );
+        assert_eq!(
+            run(&["--no-window", "--look", "original"]),
+            Run {
+                no_window: true,
+                ..Run::default()
+            }
+        );
+        for command in [&["--check"][..], &["--help"], &["--help", "--linux"]] {
+            assert!(run(command).command, "{command:?}");
+        }
+        assert!(run(&["--help", "--linux"]).linux);
+    }
+
+    #[test]
+    fn the_helpers_command_lines_follow_the_sdk() {
+        // REA_SETTINGS_ARGS and REA_PLAY_ARGS of sdk/rea-play.sh: the
+        // audience is the SDK's for every run that is not a command.
+        for args in [
+            &["--settings", "--linux"][..],
+            &["--no-window"],
+            &["--no-window", "--look", "steam_deck"],
+            &[],
+        ] {
+            let invocation = parse(args).unwrap();
+            for wine in [true, false] {
+                assert_eq!(
+                    invocation.audience(wine),
+                    Audience::of(invocation.run(), wine),
+                    "{args:?}, Wine {wine}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -236,7 +286,7 @@ mod messages {
         ] {
             assert_eq!(routed(run, true, UNDER_HELPER), BOTH, "{run:?}");
             assert!(matches!(
-                parse(run).unwrap().message_mode(true),
+                parse(run).unwrap().audience(true).mode(),
                 Mode::Play { .. }
             ));
         }
@@ -261,7 +311,17 @@ mod messages {
         for command in [&["--check"][..], &["--help"]] {
             assert_eq!(routed(command, true, UNDER_HELPER), printed, "{command:?}");
         }
-        assert_eq!(route(cli::usage_error_mode(true), UNDER_HELPER), printed);
+        assert_eq!(
+            route(bad_line(&["--vsync", "maybe"], true), UNDER_HELPER),
+            printed
+        );
+        assert_eq!(
+            route(
+                bad_line(&["--frobnicate", "--no-window"], true),
+                UNDER_HELPER
+            ),
+            printed
+        );
     }
 
     #[test]
@@ -281,8 +341,10 @@ mod messages {
             assert!(from_terminal.print && !from_terminal.dialog, "{command:?}");
             assert!(routed(command, false, shortcut).dialog, "{command:?}");
         }
-        assert!(!route(cli::usage_error_mode(false), terminal).dialog);
-        assert!(route(cli::usage_error_mode(false), shortcut).dialog);
+        assert!(!route(bad_line(&["--vsync", "maybe"], false), terminal).dialog);
+        assert!(route(bad_line(&["--vsync", "maybe"], false), shortcut).dialog);
+        // A script's bad line on Windows (`--no-window`) never waits on one.
+        assert!(!route(bad_line(&["--frobnicate", "--no-window"], false), shortcut).dialog);
     }
 
     #[test]
@@ -311,7 +373,7 @@ mod messages {
         if !wine::is_wine() {
             return;
         }
-        let mode = parse(&["--no-window"]).unwrap().message_mode(true);
+        let mode = parse(&["--no-window"]).unwrap().audience(true).mode();
         assert!(report::route_here(mode).dialog);
     }
 }

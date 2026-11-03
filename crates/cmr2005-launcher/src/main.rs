@@ -64,9 +64,10 @@ mod app {
         }
     }
 
-    /// Where messages go (`Invocation::message_mode`): printed (the
-    /// terminal, or the log `cmr2005-play`, the AppImage and Proton keep),
-    /// and a dialog whenever a person may be watching a play-time error.
+    /// Where messages go (`Invocation::audience`, the SDK's rule): printed
+    /// (the terminal, or the log `cmr2005-play`, the AppImage and Proton
+    /// keep), and a dialog whenever a person may be watching a play-time
+    /// error.
     struct Out {
         log: Log,
         mode: report::Mode,
@@ -95,11 +96,13 @@ mod app {
     pub fn run() -> i32 {
         let log = Log::new(home().join("launcher.log"));
         log.line(concat!("CMR2005Launcher ", env!("CARGO_PKG_VERSION")));
-        let parsed = cli::parse(std::env::args().skip(1));
-        let mode = match &parsed {
-            Ok(invocation) => invocation.message_mode(wine::is_wine()),
-            Err(_) => cli::usage_error_mode(wine::is_wine()),
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let parsed = cli::parse(args.iter().cloned());
+        let audience = match &parsed {
+            Ok(invocation) => invocation.audience(wine::is_wine()),
+            Err(_) => cli::usage_error_audience(&args, wine::is_wine()),
         };
+        let mode = audience.mode();
         let out = Out { log, mode };
         let invocation = match parsed {
             Ok(invocation) => invocation,
