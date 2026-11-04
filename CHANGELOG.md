@@ -5,6 +5,24 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+From a native Windows 10 test of the launchers (rea-launcher-sdk#1).
+
+### Changed
+
+- Updated rea-launcher-sdk to v0.4.2.
+- The README says what to do when Windows SmartScreen stops the first
+  start ("Windows protected your PC": More info, then Run anyway), and
+  lists every registry entry the launcher writes, with how to remove them
+  when you uninstall.
+- New releases of DXVK and innoextract are now watched every week, so
+  the launcher hears of them.
+
+### Fixed
+
+- `--check` refusals and every error are now printed to standard output,
+  like the other rea launchers. Before, they went to standard error only,
+  so `CMR2005Launcher.exe --check > report.txt` gave an empty file.
+
 ## [0.2.0] - 2026-11-03
 
 ### Changed
