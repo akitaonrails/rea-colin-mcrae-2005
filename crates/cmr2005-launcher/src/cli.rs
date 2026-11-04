@@ -15,8 +15,8 @@ use crate::source::{self, Source};
 pub const OK: i32 = 0;
 /// Refused: an unknown edition, no game folder, a failed `--check`.
 pub const REFUSED: i32 = 1;
-/// A bad command line.
-pub const USAGE_ERROR: i32 = 2;
+/// A bad command line (the family code, `report::BAD_COMMAND_LINE`).
+pub const USAGE_ERROR: i32 = rea_launcher_win32::report::BAD_COMMAND_LINE;
 /// `--settings`: the window was closed without Play.
 pub const WINDOW_CLOSED: i32 = 3;
 /// `--settings`: no window could be made (the helper then plays anyway).
@@ -103,15 +103,13 @@ fn commands_print_only(audience: Audience, wine: bool) -> Audience {
     }
 }
 
-/// Who sees the message for a command line that did not parse: it is
-/// answered like a command ([`Invocation::audience`]), from the flags it
-/// has (`args` without the program name).
+/// Who sees the message for a command line that did not parse (`args`
+/// without the program name): the SDK's [`Run::bad_command_line`], a
+/// command, answered on the terminal and exiting [`USAGE_ERROR`]. Only
+/// [`commands_print_only`] is ours: the SDK has no rule for commands under
+/// Wine yet.
 pub fn usage_error_audience<S: AsRef<str>>(args: &[S], wine: bool) -> Audience {
-    let run = Run {
-        command: true,
-        ..Run::from_args(args, &[])
-    };
-    commands_print_only(Audience::of(run, wine), wine)
+    commands_print_only(Audience::of(Run::bad_command_line(args), wine), wine)
 }
 
 /// Reads the command line (without the program name). The error is the

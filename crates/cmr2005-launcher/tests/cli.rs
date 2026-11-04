@@ -238,7 +238,7 @@ fn the_program_says_it_is_for_windows() {
 mod messages {
     use super::parse;
     use cmr2005_launcher::cli;
-    use rea_launcher_win32::report::{Audience, Mode, Route, Run, Terminal, route};
+    use rea_launcher_win32::report::{self, Audience, Mode, Route, Run, Terminal, route};
 
     const UNDER_HELPER: Terminal = Terminal {
         attached: false,
@@ -350,6 +350,37 @@ mod messages {
             ),
             printed
         );
+    }
+
+    /// A command line that fails to parse is the SDK's
+    /// `Run::bad_command_line` (rea-launcher-sdk#1): a command, never a
+    /// play run whose modal dialog a terminal would wait on, exit 2. On
+    /// native Windows the audience is the SDK's as is; under Wine only
+    /// `commands_print_only` narrows it (never a dialog).
+    #[test]
+    fn a_bad_command_line_is_the_sdks_bad_command_line() {
+        assert_eq!(cli::USAGE_ERROR, report::BAD_COMMAND_LINE);
+        let terminal = Terminal {
+            attached: true,
+            redirected: false,
+            wine: false,
+        };
+        for args in [
+            &["--bogus-flag"][..],
+            &["--look", "invalid"],
+            &["--no-window", "--bogus-flag"],
+            &["--settings", "--linux", "--vsync", "maybe"],
+        ] {
+            assert!(parse(args).is_err(), "{args:?}");
+            let sdk = Audience::of(Run::bad_command_line(args), false);
+            assert_eq!(cli::usage_error_audience(args, false), sdk, "{args:?}");
+            let mode = bad_line(args, false);
+            assert!(matches!(mode, Mode::Command { .. }), "{args:?}");
+            let from_terminal = route(mode, terminal);
+            assert!(from_terminal.print && !from_terminal.dialog, "{args:?}");
+            let under_wine = cli::usage_error_audience(args, true);
+            assert!(under_wine.command && !under_wine.interactive, "{args:?}");
+        }
     }
 
     #[test]
