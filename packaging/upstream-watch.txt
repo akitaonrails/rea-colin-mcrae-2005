@@ -1,0 +1,16 @@
+# Components the weekly watch-upstream workflow checks, one per line:
+#
+#   name owner/repo asset-name-prefix
+#
+# `name` is a pin in packaging/third-party.txt whose url is a file that
+# owner/repo's releases upload (https://github.com/owner/repo/releases/download/…).
+# Every pin of a GitHub release belongs here (launcher-check unwatched-pins).
+#
+# The watch takes the first asset whose name starts with the prefix.
+# DXVK uploads dxvk-X.tar.gz before dxvk-native-…; innoextract uploads
+# its Linux tarball first, so its prefix is the whole Windows zip name: a
+# new release then shows up as "no asset starting with …", which opens
+# the issue all the same.
+
+dxvk doitsujin/dxvk dxvk-
+innoextract dscharrer/innoextract innoextract-1.9-windows.zip
