@@ -5,6 +5,8 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-03
+
 From a native Windows 10 test of the launchers (rea-launcher-sdk#1).
 
 ### Changed
