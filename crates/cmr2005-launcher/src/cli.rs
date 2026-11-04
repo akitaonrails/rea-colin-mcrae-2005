@@ -78,12 +78,6 @@ impl Invocation {
     pub fn audience(&self, wine: bool) -> Audience {
         commands_print_only(Audience::of(self.run(), wine), wine)
     }
-
-    /// Whether the run does work without the window (`--check`): a second
-    /// start then never brings the open window forward and exits non-zero.
-    pub fn is_action(&self) -> bool {
-        self.mode == Mode::Check
-    }
 }
 
 /// A command's output (`--help`, `--check`, a bad command line) under Wine

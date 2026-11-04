@@ -446,11 +446,31 @@ mod second_start {
     use cmr2005_launcher::{WINDOW_TITLE, cli};
     use rea_launcher_win32::instance::{self, SecondStart};
 
+    /// The family's action flags (`instance::is_action`): `--check` takes
+    /// the instance, so with the settings window open it is refused with
+    /// exit 5 and the "window is open" message, never answered by bringing
+    /// the window forward (rea-launcher-sdk#1, finding 5).
     #[test]
-    fn only_check_is_an_action() {
-        assert!(parse(&["--check"]).unwrap().is_action());
-        for args in [&[][..], &["--no-window"], &["--settings", "--linux"]] {
-            assert!(!parse(args).unwrap().is_action(), "{args:?}");
+    fn check_with_the_window_open_is_refused_with_exit_5() {
+        let decide = |args: &[&str], window_open: bool| {
+            assert!(parse(args).is_ok(), "{args:?}");
+            SecondStart::decide(
+                instance::is_action(args, &[]),
+                || window_open,
+                || window_open,
+            )
+        };
+        for check in [&["--check"][..], &["--check", "--game", r"D:\Games\CMR05"]] {
+            let open = decide(check, true);
+            assert_eq!(open, SecondStart::WindowOpen, "{check:?}");
+            assert_eq!(open.exit_code(), cli::ALREADY_RUNNING);
+            let text = open.message("Colin McRae Rally 2005").unwrap();
+            assert!(text.contains("launcher window is open"), "{text}");
+            assert_eq!(decide(check, false), SecondStart::Busy, "{check:?}");
+        }
+        for plain in [&[][..], &["--no-window"], &["--settings", "--linux"]] {
+            assert_eq!(decide(plain, true), SecondStart::Focused, "{plain:?}");
+            assert_eq!(decide(plain, true).exit_code(), cli::OK);
         }
     }
 

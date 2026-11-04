@@ -113,7 +113,7 @@ mod app {
                 return cli::USAGE_ERROR;
             }
         };
-        match run_mode(&out, invocation) {
+        match run_mode(&out, invocation, instance::is_action(&args, &[])) {
             Ok(code) => code,
             Err(error) => {
                 out.log.line(&format!("error: {error}"));
@@ -123,18 +123,20 @@ mod app {
         }
     }
 
-    fn run_mode(out: &Out, invocation: Invocation) -> Result<i32, String> {
+    /// `action`: the command line holds a family action flag (`--check`,
+    /// `instance::is_action`), refused while the window is open.
+    fn run_mode(out: &Out, invocation: Invocation, action: bool) -> Result<i32, String> {
         if invocation.mode == Mode::Help {
             out.say(&config::usage());
             return Ok(cli::OK);
         }
-        // Held until the game exits: a second start brings the settings
-        // window forward, or says the game is running and exits 5.
+        // Held until the game exits (`--check` takes it too): a second
+        // start brings the settings window forward, or says the game is
+        // running (an action: the window is open) and exits 5.
         let instance = match instance::single(INSTANCE) {
             Ok(guard) => guard,
             Err(running) => {
-                let second =
-                    running.second_start(invocation.is_action(), Window::Own(WINDOW_TITLE));
+                let second = running.second_start(action, Window::Own(WINDOW_TITLE));
                 out.log.line(second.log_line());
                 if let Some(text) = second.message(TITLE) {
                     out.fail(&text);
