@@ -63,27 +63,30 @@ mod app {
     }
 
     /// Where messages go (`Invocation::audience`, the SDK's rule): printed
-    /// (the terminal, or the log `cmr2005-play`, the AppImage and Proton
-    /// keep), and a dialog whenever a person may be watching a play-time
-    /// error.
+    /// on stdout like the family (the terminal, a file `--check >
+    /// report.txt` names, or the log `cmr2005-play`, the AppImage and
+    /// Proton keep), and a dialog whenever a person may be watching a
+    /// play-time error.
     struct Out {
         log: Log,
         mode: report::Mode,
     }
 
     impl Out {
-        fn say(&self, text: &str, icon: Icon) {
+        /// A command's result (`--help`, `--check`).
+        fn say(&self, text: &str) {
             let route = report::route_here(self.mode);
             if route.print {
-                if icon == Icon::Info {
-                    println!("{text}");
-                } else {
-                    eprintln!("{text}");
-                }
+                println!("{text}");
             }
             if route.dialog {
-                dialog::message(TITLE, text, icon);
+                dialog::message(TITLE, text, Icon::Info);
             }
+        }
+
+        /// An error or a refusal: stdout and/or a dialog (`report::fatal`).
+        fn fail(&self, text: &str) {
+            report::fatal(TITLE, text, self.mode);
         }
 
         fn warn(&self, message: &str) {
@@ -106,7 +109,7 @@ mod app {
             Ok(invocation) => invocation,
             Err(error) => {
                 out.log.line(&format!("error: {error}"));
-                out.say(&error, Icon::Error);
+                out.fail(&error);
                 return cli::USAGE_ERROR;
             }
         };
@@ -114,7 +117,7 @@ mod app {
             Ok(code) => code,
             Err(error) => {
                 out.log.line(&format!("error: {error}"));
-                out.say(&error, Icon::Error);
+                out.fail(&error);
                 cli::REFUSED
             }
         }
@@ -122,7 +125,7 @@ mod app {
 
     fn run_mode(out: &Out, invocation: Invocation) -> Result<i32, String> {
         if invocation.mode == Mode::Help {
-            out.say(&config::usage(), Icon::Info);
+            out.say(&config::usage());
             return Ok(cli::OK);
         }
         // Held until the game exits: a second start brings the settings
@@ -134,7 +137,7 @@ mod app {
                     running.second_start(invocation.is_action(), Window::Own(WINDOW_TITLE));
                 out.log.line(second.log_line());
                 if let Some(text) = second.message(TITLE) {
-                    out.say(&text, Icon::Error);
+                    out.fail(&text);
                 }
                 return Ok(second.exit_code());
             }
@@ -197,7 +200,7 @@ mod app {
         out.log
             .line(&format!("game: {} ({})", game.display(), source.describe()));
         if invocation.mode == Mode::Check {
-            out.say(&cli::check_report(&game, &source), Icon::Info);
+            out.say(&cli::check_report(&game, &source));
             return Ok(cli::OK);
         }
         if first_run || saved.game.as_ref() != Some(&game) {
@@ -222,7 +225,7 @@ mod app {
         if !process::find_running(&folders.runtime.join(edition::GAME_EXE)).is_empty() {
             let busy = SecondStart::Busy;
             out.log.line(busy.log_line());
-            out.say(&busy.message(TITLE).unwrap_or_default(), Icon::Error);
+            out.fail(&busy.message(TITLE).unwrap_or_default());
             return Ok(busy.exit_code());
         }
         let game_dir = match &source {

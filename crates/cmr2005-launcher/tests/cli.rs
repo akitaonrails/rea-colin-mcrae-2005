@@ -167,12 +167,38 @@ mod program {
     fn a_bad_flag_exits_2_with_its_message() {
         let (output, log) = run("bad", &["--vsync", "maybe"]);
         assert_eq!(output.status.code(), Some(cli::USAGE_ERROR));
-        assert!(text(&output.stderr).contains("--vsync needs on or off"));
+        assert!(text(&output.stdout).contains("--vsync needs on or off"));
         assert!(
             std::fs::read_to_string(log)
                 .unwrap()
                 .contains("--vsync needs on or off")
         );
+    }
+
+    /// rea-launcher-sdk#1: an unknown flag or a bad value is answered on
+    /// stdout at once (no dialog to wait on) with exit 2, so
+    /// `launcher --bogus-flag > out.txt` holds the message.
+    #[test]
+    fn an_unknown_flag_or_bad_value_prints_to_stdout_and_exits_2() {
+        for (name, args, says) in [
+            (
+                "bogus",
+                &["--bogus-flag"][..],
+                "unknown argument --bogus-flag",
+            ),
+            (
+                "look",
+                &["--look", "invalid"],
+                "original, widescreen or steam_deck",
+            ),
+        ] {
+            let (output, _) = run(name, args);
+            assert_eq!(output.status.code(), Some(2), "{args:?}");
+            let stdout = text(&output.stdout);
+            assert!(stdout.contains(says), "{args:?}: {stdout}");
+            assert!(stdout.contains("--help"), "{args:?}: {stdout}");
+            assert!(text(&output.stderr).is_empty(), "{args:?}");
+        }
     }
 
     #[test]
@@ -183,7 +209,9 @@ mod program {
         let (output, log) = run("unknown", &["--check", "--game", &game]);
         assert_eq!(output.status.code(), Some(cli::REFUSED));
         let digest = identify::hex(&identify::sha256(b"some other build"));
-        assert!(text(&output.stderr).contains(&digest));
+        // stdout like the family (rea-launcher-sdk#1): `--check > report.txt`.
+        assert!(text(&output.stdout).contains(&digest));
+        assert!(text(&output.stderr).is_empty());
         let log = std::fs::read_to_string(log).unwrap();
         assert!(
             log.contains(&digest) && log.contains(edition::UNKNOWN_EDITION_ISSUE),
