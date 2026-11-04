@@ -68,6 +68,9 @@ Download from the [latest release](https://github.com/akitaonrails/rea-colin-mcr
 2. Keep the `components` folder next to `CMR2005Launcher.exe`.
 3. Run `CMR2005Launcher.exe`.
 
+The launcher is unsigned, so the first start from a downloaded zip may
+show "Windows protected your PC": click *More info*, then *Run anyway*.
+
 ### Steam Deck
 
 1. In Desktop Mode, keep the AppImage (or unzip the zip) somewhere in your
@@ -206,11 +209,14 @@ install). Under Proton everything is inside Steam's
 The copy of the game links the big data files instead of copying them
 where the disk allows, so it takes little extra space.
 
-The launcher writes the game's own registry key,
-`HKEY_LOCAL_MACHINE\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005`
-(`INSTALL_PATH`, `SAVEGAME_PATH`, and `WIDTH`/`HEIGHT` when a look or
-resolution is set). Without administrator rights Windows keeps them per
-user, and the game reads them from there.
+Registry entries the launcher writes:
+
+| Entry | Where | What |
+| --- | --- | --- |
+| The game's own key | Windows: `HKEY_LOCAL_MACHINE\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005` (`SOFTWARE\WOW6432Node\…` on 64-bit Windows). Without administrator rights Windows keeps it per user in `HKEY_CURRENT_USER\Software\Classes\VirtualStore\MACHINE\SOFTWARE\WOW6432Node\CODEMASTERS\Colin McRae Rally 2005`, and the game reads it from there. Linux: the same key inside the prefix. | `INSTALL_PATH`, `SAVEGAME_PATH`, and `WIDTH`/`HEIGHT` when a look or resolution is set |
+| The fast-GPU preference (Windows only) | `HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences` | a value named after the private copy's `cmr5.exe` (by default `%LOCALAPPDATA%\CMR2005Launcher\runtime\cmr5.exe`): `GpuPreference=2;`, written once, when it isn't there yet |
+| DXVK for the game (Wine and Proton only) | `HKEY_CURRENT_USER\Software\Wine\AppDefaults\cmr5.exe\DllOverrides`, and the launcher's record of it in `HKEY_CURRENT_USER\Software\rea-launcher\DllOverrides\cmr5.exe` | `d3d9` = `native,builtin` |
+| OpenGL through GLX for the settings window (Wine and Proton only) | `HKEY_CURRENT_USER\Software\Wine\X11 Driver` | `UseEGL` = `N`, when it isn't set yet |
 
 ## Troubleshooting
 
@@ -263,12 +269,17 @@ user, and the game reads them from there.
    inside the prefix on Linux. The next steps delete them.
 2. Delete the launcher's folder (or the AppImage).
 3. Windows: delete `%LOCALAPPDATA%\CMR2005Launcher` (settings, log, the
-   private copy, and the unpacked game, about 3.5 GB). Keep the registry key
-   above if you still play the game without the launcher; otherwise you can
-   delete it.
+   private copy, and the unpacked game, about 3.5 GB). In the registry
+   (`regedit`), delete the value named after the private copy's `cmr5.exe`
+   (`…\CMR2005Launcher\runtime\cmr5.exe`) under `HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences`.
+   Keep the game's key (`…\CODEMASTERS\Colin McRae Rally 2005`, in
+   HKEY_LOCAL_MACHINE or the VirtualStore, see
+   [Where things live](#where-things-live)) if you still play the game
+   without the launcher; otherwise you can delete it.
 4. Linux: copy the saves out, then delete `~/.local/share/cmr2005-launcher`
-   and `~/.config/cmr2005-launcher`. Under Proton, removing the Steam
-   shortcut offers to delete its prefix, saves included.
+   and `~/.config/cmr2005-launcher`; the registry entries live in that
+   prefix and go with it. Under Proton, removing the Steam shortcut offers
+   to delete its prefix, saves and registry entries included.
 
 Your game folder was never changed, so there is nothing to undo there.
 
