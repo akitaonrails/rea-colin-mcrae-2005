@@ -18,6 +18,9 @@ rea-launcher.workspace = true
 rea-launcher-win32.workspace = true
 rea-launcher-close-hook.workspace = true
 
+[build-dependencies]
+rea-launcher-build.workspace = true
+
 [target.'cfg(windows)'.dependencies]
 rea-launcher-ui.workspace = true
 

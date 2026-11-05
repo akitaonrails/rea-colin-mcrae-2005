@@ -275,6 +275,7 @@ name = "cmr2005-launcher"
 version = "0.2.1"
 dependencies = [
  "rea-launcher",
+ "rea-launcher-build",
  "rea-launcher-close-hook",
  "rea-launcher-ui",
  "rea-launcher-win32",
