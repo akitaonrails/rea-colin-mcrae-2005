@@ -5,6 +5,23 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+To avoid antivirus false positives: a player's antivirus flagged another
+rea launcher on Windows, so this launcher no longer looks like the
+programs those checks are built to catch.
+
+### Changed
+
+- Updated rea-launcher-sdk to v0.4.3.
+- `CMR2005Launcher.exe` now says what it is: its name, version, publisher
+  and icon show in Explorer's Properties and in the task manager.
+  Antivirus programs are less likely to flag a program that does.
+- The launcher no longer reaches into the running game to make Alt+F4 and
+  closing the window work. Instead, the game's private copy loads the
+  launcher's `rea_close_hook.dll` itself when it starts. Your own game
+  files are still never changed. Quitting works as before: closing the
+  window or the game's own Exit end it, and Alt+F4 does while the mouse
+  moves (the game keeps the keyboard to itself).
+
 ## [0.2.1] - 2026-11-03
 
 From a native Windows 10 test of the launchers (rea-launcher-sdk#1).

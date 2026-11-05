@@ -83,7 +83,10 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   (`BESTTIMES_GHOSTS`, `CAREER_SLOT_*`, `CHAMPIONSHIP_SLOT_*`), plus the
   registry values above.
 - **Community components used:** none yet; Xidi planned (see `docs/RESEARCH.md`).
-- **Patches:** none. The startup crash needs no patch.
+- **Patches:** none to the game's code; the startup crash needs no patch.
+  The runtime copy's `cmr5.exe` imports `rea_close_hook.dll` (SDK v0.4.3,
+  `rea_close_hook::import_into`), rebuilt from the player's bytes on every
+  start; the launcher never hooks the running game (antivirus).
 - **Owner decisions (2026-11-02):** id `cmr2005`; accept an installed
   folder or the GOG installer files (the launcher unpacks the installer,
   which hangs under Wine); on Windows write the registry values per user

@@ -334,6 +334,40 @@ w10, the same start, stayed idle for 20 s and closed without Play. A pad
 on the host seen through the box's `/dev/input` is the likeliest cause;
 not reproduced.
 
+### 2026-11-05: rea-launcher-sdk v0.4.3, the close hook loaded with the game
+
+To avoid antivirus false positives the launcher no longer installs the
+close hook into the running game (`Running::message_hook`): the runtime's
+`cmr5.exe`, rebuilt from the player's bytes on every start, imports
+`rea_close_hook.dll` (`rea_close_hook::import_into`, a `.reahook` section),
+and `REA_CLOSE_HOOK_ATTACH=1` lets the DLL install the hook itself.
+
+Release i686 build packaged with `packaging/package.sh --no-appimage`,
+Wine 11.21 and gamescope 3.17.0 (`--backend headless`) in the `gaming`
+distrobox, started from `env -i`, a private PipeWire null sink, one
+throwaway prefix `.work/realgame/prefix-h1`, the game unpacked by the
+launcher from the owner's GOG installer (read only, on the NAS). Harness
+`.work/realgame/bin/h.sh` (processes found by the helper's session and by
+exact name only); evidence in `.work/realgame/logs/h01`, `h02`.
+
+| Run | What | Result |
+|---|---|---|
+| h01 | fresh prefix, `cmr2005-play --play --game <the installer folder>` | unpacked (`PC v1.1 (GOG)`, 5219 files, 5207 linked), `runtime cmr5.exe: imports rea_close_hook.dll` in the log, the game reached the title screen; `rea_close_hook.dll` mapped into `cmr5.exe` from the runtime folder |
+| h01 | `WM_DELETE_WINDOW` to `cmr5.exe` (compositor close) at the title screen | "game exited with 0"; game, launcher and helper gone in 3.9 s; nothing left in the session, no wineserver |
+| h02 | second start, same prefix (the runtime exe already hooked) | the exe rebuilt from the player's bytes, unchanged; the hook mapped once; the title screen |
+| h02 | Alt+F4 alone (XTest), then mouse moves alone | **ignored**, as with v0.4.2 (w02): the exclusive DirectInput keyboard |
+| h02 | Alt+F4 held while the mouse moves | "game exited with 0"; everything gone in 4.3 s; nothing left |
+
+The helper's exit 139 in both runs is gamescope 3.17.0's segfault on exit,
+as before. The host test `runtime::tests::the_real_cmr5_exe_takes_the_hook_once`
+passed against the unpacked GOG `cmr5.exe` (SHA-256 `a7ea2d33…`,
+`CMR2005_GAME_DIR`): one import of the DLL, a second pass changes nothing,
+the player's file untouched.
+
+**Still to check on Windows:** the same quitting checks on a real Windows
+10/11 install (the import path is the same loader, so no difference is
+expected), and that the player's antivirus no longer flags the launcher.
+
 ### Not verified yet
 
 - Sound on real speakers beyond what the owner heard while playing.
