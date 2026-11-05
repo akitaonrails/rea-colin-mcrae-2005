@@ -5,6 +5,8 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-05
+
 To avoid antivirus false positives: a player's antivirus flagged another
 rea launcher on Windows, so this launcher no longer looks like the
 programs those checks are built to catch.
