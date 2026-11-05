@@ -10,7 +10,10 @@
 //! - The SDK's close hook (`rea_close_hook.dll`): the game ignores Alt+F4
 //!   and window-close requests (run r13/r14), so a close request for its
 //!   window `PC_CMR5` ends it, and Alt+F4 read from the keyboard state
-//!   (`alt_f4_state`) too.
+//!   (`alt_f4_state`) too. Installed next to the runtime's `cmr5.exe`,
+//!   which imports it (`runtime::write_game_exe`): Windows loads it with
+//!   the game and it attaches itself; the launcher never hooks the
+//!   running game.
 //! - innoextract (`innoextract.exe`, zlib), which unpacks GOG's installer
 //!   ([`crate::source`]); it is never copied into the runtime.
 

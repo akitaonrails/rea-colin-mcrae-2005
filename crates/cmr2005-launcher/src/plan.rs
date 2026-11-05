@@ -7,7 +7,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::components::{self, APP_OVERRIDES, CLOSE_HOOK_CONFIG, DXVK_DLL};
+use crate::components::{self, APP_OVERRIDES, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DXVK_DLL};
 use crate::config::Picture;
 use crate::registry::{self, RegWrite};
 use crate::runtime::DXVK_CONF;
@@ -24,6 +24,9 @@ pub struct Plan {
     pub args: Vec<&'static str>,
     /// Bundled DLLs installed into the runtime.
     pub installed: Vec<&'static str>,
+    /// DLLs added to the import table of the runtime's `cmr5.exe`
+    /// (`runtime::write_game_exe`), loaded by Windows with the game.
+    pub exe_imports: Vec<&'static str>,
     /// The launcher's DLLs taken out of the runtime (the game's own come back).
     pub taken_out: Vec<&'static str>,
     /// Generated runtime files: (name, contents); `None` removes it.
@@ -97,19 +100,22 @@ pub fn plan_on(
     if picture.widescreen() {
         args.push(WIDESCREEN_ARG);
     }
+    // The close hook always: the runtime's cmr5.exe imports it, so it
+    // must sit next to it.
     let (installed, taken_out, dxvk_conf) = if wine {
         (
-            vec![DXVK_DLL],
+            vec![DXVK_DLL, CLOSE_HOOK_DLL],
             Vec::new(),
             Some(components::dxvk_conf(picture)),
         )
     } else {
-        (Vec::new(), vec![DXVK_DLL], None)
+        (vec![CLOSE_HOOK_DLL], vec![DXVK_DLL], None)
     };
     Plan {
         registry: registry::writes(runtime, saves, picture.size()),
         args,
         installed,
+        exe_imports: vec![CLOSE_HOOK_DLL],
         taken_out,
         files: vec![(DXVK_CONF, dxvk_conf)],
         app_dll_overrides: if wine {
@@ -117,7 +123,13 @@ pub fn plan_on(
         } else {
             Vec::new()
         },
-        env: vec![(rea_close_hook::ENV, CLOSE_HOOK_CONFIG)],
+        // The hook DLL, loaded through the import table, installs itself
+        // on the game's window thread (`ATTACH_ENV`): the launcher never
+        // touches the running game.
+        env: vec![
+            (rea_close_hook::ENV, CLOSE_HOOK_CONFIG),
+            (rea_close_hook::ATTACH_ENV, "1"),
+        ],
         prefer_fast_gpu: !wine,
         // The desktop is the game's whole screen: its mode, else the monitor.
         virtual_desktop: desktop
@@ -140,6 +152,7 @@ impl Plan {
         let _ = writeln!(out, "arguments: {}", list(&self.args));
         let _ = writeln!(out, "components installed: {}", list(&self.installed));
         let _ = writeln!(out, "components taken out: {}", list(&self.taken_out));
+        let _ = writeln!(out, "cmr5.exe imports: {}", list(&self.exe_imports));
         let _ = writeln!(out, "prefer fast GPU: {}", self.prefer_fast_gpu);
         if let Some((w, h)) = self.virtual_desktop {
             let _ = writeln!(out, "Wine virtual desktop: {DESKTOP_NAME},{w}x{h}");
@@ -198,7 +211,7 @@ mod tests {
         );
         assert_eq!(plan.args, [WIDESCREEN_ARG]);
         assert_eq!(plan.registry.len(), 4);
-        assert_eq!(plan.installed, [DXVK_DLL]);
+        assert_eq!(plan.installed, [DXVK_DLL, CLOSE_HOOK_DLL]);
         assert_eq!(plan.app_dll_overrides, ["d3d9"]);
         assert!(!plan.prefer_fast_gpu);
     }
@@ -214,6 +227,7 @@ mod tests {
         assert!(plan.args.is_empty());
         assert_eq!(plan.registry.len(), 2, "only the two paths");
         assert_eq!(plan.taken_out, [DXVK_DLL]);
+        assert_eq!(plan.installed, [CLOSE_HOOK_DLL], "next to cmr5.exe");
         assert_eq!(plan.files, [(DXVK_CONF, None)]);
         assert!(plan.app_dll_overrides.is_empty());
         assert!(plan.prefer_fast_gpu);
@@ -297,6 +311,27 @@ mod tests {
                 "WIDESCREENDISPLAY"
             ]
         );
+    }
+
+    /// The close hook is loaded with the game, never installed from the
+    /// launcher (antivirus heuristics take that for a keylogger): the
+    /// runtime's cmr5.exe imports it, the DLL sits next to it, and the
+    /// game's environment tells it to attach itself.
+    #[test]
+    fn the_close_hook_is_imported_by_the_game_and_attaches_itself() {
+        for wine in [true, false] {
+            let plan = plan(
+                &picture(Resolution::Original),
+                Path::new("/r"),
+                Path::new("/s"),
+                wine,
+            );
+            assert_eq!(plan.exe_imports, [CLOSE_HOOK_DLL]);
+            assert!(plan.installed.contains(&CLOSE_HOOK_DLL), "wine: {wine}");
+            assert!(plan.env.contains(&(rea_close_hook::ENV, CLOSE_HOOK_CONFIG)));
+            assert!(plan.env.contains(&(rea_close_hook::ATTACH_ENV, "1")));
+        }
+        assert_eq!(CLOSE_HOOK_DLL, rea_close_hook::DLL);
     }
 
     #[test]

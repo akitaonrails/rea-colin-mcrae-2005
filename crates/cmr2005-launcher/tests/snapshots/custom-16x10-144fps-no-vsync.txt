@@ -3,8 +3,9 @@ screen: 1920x1200, Wine: true
 picture: resolution 1920x1200, fps_limit 144, vsync off
 
 arguments: (none)
-components installed: d3d9.dll
+components installed: d3d9.dll, rea_close_hook.dll
 components taken out: (none)
+cmr5.exe imports: rea_close_hook.dll
 prefer fast GPU: false
 
 [registry HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005]
@@ -18,6 +19,7 @@ d3d9 = native,builtin
 
 [environment]
 REA_CLOSE_HOOK=class=PC_CMR5;close_on=sc_close,alt_f4,alt_f4_state;strategy=terminate
+REA_CLOSE_HOOK_ATTACH=1
 
 [file dxvk.conf]
 # Written by CMR2005Launcher on every start; change the settings in the launcher.

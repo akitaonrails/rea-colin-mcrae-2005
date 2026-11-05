@@ -291,6 +291,17 @@ mod app {
             placement.virtual_desktop.then_some(screen).flatten(),
         );
         install_components(out, &plan, &game_dir, &folders.runtime, &components_dir)?;
+        // From the player's bytes on every start, with the close hook in
+        // its import table: Windows loads the hook with the game, which
+        // installs itself (REA_CLOSE_HOOK_ATTACH); nothing crosses processes.
+        match runtime::write_game_exe(&game_dir, &folders.runtime)? {
+            None => out.log.line(&format!(
+                "runtime {}: imports {}",
+                edition::GAME_EXE,
+                plan.exe_imports.join(", ")
+            )),
+            Some(warning) => out.warn(&warning),
+        }
         write_registry(out, &plan)?;
         if !plan.app_dll_overrides.is_empty() {
             let applied = wine::app_dll_overrides(edition::GAME_EXE, &APP_OVERRIDES)
@@ -330,17 +341,6 @@ mod app {
         }
         out.log.line("starting the game");
         let game_process = launch.spawn()?;
-        let hook_dll = components_dir.join(components::CLOSE_HOOK_DLL);
-        // In a virtual desktop the process is Wine's explorer, not the game:
-        // closing the desktop window ends the game instead.
-        let _hook = match game_process.message_hook(&hook_dll, c"close_hook") {
-            _ if plan.virtual_desktop.is_some() => None,
-            Ok(hook) => Some(hook),
-            Err(error) => {
-                out.warn(&format!("close hook not installed: {error}"));
-                None
-            }
-        };
         let code = game_process.wait()?;
         out.log.line(&format!("game exited with {code}"));
         Ok(code as i32)
