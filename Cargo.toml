@@ -13,13 +13,13 @@ repository = "https://github.com/akitaonrails/rea-colin-mcrae-2005"
 # change the tag on all four lines, re-run `scripts/sdk-sync` from that SDK
 # checkout and move the `@vX.Y.Z` of the workflows in .github/workflows/build.yml
 # (rea-launcher-sdk docs/playbooks/sdk-change.md).
-rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.2" }
-rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.2" }
-rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.2" }
+rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.3" }
+rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.3" }
+rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.3" }
 # The close hook DLL shipped in components/ (built with
 # `cargo build -p rea-launcher-close-hook`); its parser checks our
 # configuration in the host tests.
-rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.2" }
+rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.4.3" }
 
 [profile.release]
 panic = "abort"
