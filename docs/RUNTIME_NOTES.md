@@ -368,6 +368,34 @@ the player's file untouched.
 10/11 install (the import path is the same loader, so no difference is
 expected), and that the player's antivirus no longer flags the launcher.
 
+### 2026-11-07: triage of issue #1 (high frame rates, particles, pads, EAX, saves)
+
+The issue's claims were checked against the game's own files (read only:
+the GOG installer's `readme.txt`, `Whole_E.Lng` and `cmr5.exe`) and the
+launcher code; no game run was needed.
+
+- **Advanced particles / EAX / Vsync / refresh rate:** the game's Advanced
+  Options contain "Advanced particles", "Post processing effects",
+  "Environmental Audio (EAX) 4.0", "Vsync" and "Refresh Rate" (strings in
+  `Whole_E.Lng`), so these are the game's own settings, not launcher ones.
+- **`FORCEHT`:** the switch sets the game's Hyper-Threading mode
+  (`0xb6412b`, read at `0x588236`: 2 = forced HT, `DISABLEHT` = off), the
+  `IntelHT` build's path; it is not a particle switch. The launcher does
+  not pass it.
+- **Pads:** the game's Controllers menu calibrates deadzone and saturation
+  and holds Vibration and Vibration Strength (same language file and
+  `readme.txt` §IX). The launcher adds no mapping of its own yet.
+- **Saves:** the launcher has no profile switch and no code path that
+  deletes a save; its `saves` folder is per Windows user. The reported loss
+  after a "profile change" was not reproduced and needs the exact steps.
+- **Widescreen cap:** the Widescreen look now sets `fps_limit = 60` (the
+  value already seen in the game in w05); no new game behaviour.
+
+Still unverified: whether capping at 60 fixes the reported driver
+animations (the reporter's system is Windows, where the launcher's cap does
+not apply), and the 4:3 shape of the intro videos (inferred from the
+stretching report, not measured).
+
 ### Not verified yet
 
 - Sound on real speakers beyond what the owner heard while playing.

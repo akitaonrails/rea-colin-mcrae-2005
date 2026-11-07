@@ -139,11 +139,15 @@ leaves the look cards unselected (your own mix).
 | Look | Resolution | Frame-rate cap | VSync | When to pick it |
 | --- | --- | --- | --- | --- |
 | **Original** | the game's own (it starts at 640×480) | none | off | to see the game as it shipped |
-| **Widescreen** | the largest 16:9 size that fits your screen, widescreen view | none | on | most screens (picked on the first run) |
+| **Widescreen** | the largest 16:9 size that fits your screen, widescreen view | 60 fps | on | most screens (picked on the first run) |
 | **Steam Deck** | 1280×720, widescreen view | 60 fps | on | the Deck (picked there on the first run) |
 
 The game's widescreen view is only correct at 16:9 sizes. Other shapes
 (16:10, 21:9, 4:3) keep the game's 4:3 view.
+
+The cap is 60 frames per second because the game's animations are timed to
+its frame rate; at higher rates driver animations can look wrong. Raise the
+cap in the Picture tab if you want more frames.
 
 The window works with the keyboard alone: Tab moves, Enter or Space
 activates, Enter plays. A control that can't be used says why.
@@ -153,7 +157,29 @@ activates, Enter plays. A control that can't be used says why.
 The launcher adds nothing for pads: the game reads them itself. Set yours
 up once in the game's **Options**, in its controller settings: choose the
 pad, then the buttons and the steering and pedal axes. A gamepad
-was set up this way and played a full stage on Linux.
+was set up this way and played a full stage on Linux. The same screen
+calibrates the axes (**deadzone** and **saturation**) and holds the
+**Vibration** and **Vibration Strength** settings.
+
+## The game's own settings
+
+The launcher sets the picture size and, under Wine and Proton, the frame-rate
+cap and VSync. Everything else belongs to the game, in its own **Options**:
+
+- **Options → Graphics → Advanced Options** has **Advanced particles**
+  (on/off), **Post processing effects**, **Texture Quality**, **Environment
+  Map**, **Shadows**, **Draw Distance**, **FSAA**, **Anisotropic filtering**
+  and **Environmental Audio (EAX) 4.0**. If a detail or an effect is missing,
+  look there first; the launcher does not change those settings.
+- **Vsync** and **Refresh Rate** are in the advanced display options. On
+  Windows these are the settings to use: the launcher's frame-rate cap and
+  VSync work under Wine and Proton only.
+- **Options → Controllers** chooses and calibrates the pad (deadzone,
+  saturation) and holds the vibration settings.
+
+EAX 4.0 is the game's own audio option and needs a Creative driver or an
+EAX wrapper such as DSOAL; modern Windows and Wine provide neither, and the
+launcher does not bundle one.
 
 ## Options
 
@@ -168,7 +194,7 @@ filled in.
 | `game` / `--game` | Play: Game folder | a folder | asked in the window | Your installed game, or the folder with GOG's installer files. Only read. |
 | `look` / `--look` | Play: the look cards | `original`, `widescreen`, `steam_deck` | none | Sets the resolution, cap and VSync at once; options set after it win. |
 | `resolution` / `--resolution` | Picture: Resolution | `WIDTHxHEIGHT`, `original` | the game's own | The picture size. A 16:9 size gets the widescreen view. |
-| `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | `0`–`1000`, `off` | no cap | The most frames per second. Under Wine and Proton only. |
+| `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | `0`–`1000`, `off` | no cap | The most frames per second. 60 keeps the game's animations steady. Under Wine and Proton only. |
 | `vsync` / `--vsync` | Picture: VSync | `on`, `off` | the game's own | Waits for the screen: no tearing. Under Wine and Proton only. |
 | `runtime` / `--runtime` | — (file and flag only) | a folder | beside `launcher.log` | Where the launcher keeps its private copy. |
 
@@ -240,6 +266,15 @@ Registry entries the launcher writes:
   that window. Make it fullscreen with your desktop's shortcut, or play
   through gamescope (the AppImage and `cmr2005-play` use it when it is
   installed). On Windows, make a landscape monitor the main one.
+- **Driver animations look wrong at a high refresh rate:** cap the game at
+  60 fps. Under Wine and Proton set **Frame-rate cap** to 60 in the Picture
+  tab; on Windows use the game's own **Vsync** and **Refresh Rate** options
+  (Options → Graphics → Advanced Options) or your graphics driver's
+  frame-rate limit for `cmr5.exe`.
+- **A sound or graphical detail is missing:** check the game's own
+  **Options → Graphics → Advanced Options** first: advanced particles, post
+  processing effects, shadows, draw distance, texture quality, anisotropic
+  filtering and EAX 4.0 are all there (see **The game's own settings**).
 - **Short freezes of about half a second during a stage:** reported once
   on Linux, when a co-driver call starts, and not reproduced since. If you
   see them, please report it with your sound setup and pad.
@@ -254,7 +289,14 @@ Registry entries the launcher writes:
 - Alt+F4 pressed inside the game works only while the mouse moves (or
   another message reaches the game). Closing the window works.
 - The frame-rate cap and VSync work under Wine and Proton only. On Windows
-  the game keeps its own behaviour.
+  the game keeps its own behaviour; use its **Vsync** and **Refresh Rate**
+  options.
+- The intro videos and some front-end screens keep the game's original 4:3
+  shape and look stretched in a widescreen picture; the game has no
+  letterbox setting.
+- Saves and `launcher.cfg` are per Windows user: another user profile starts
+  with its own empty `saves` folder. Copy `%LOCALAPPDATA%\CMR2005Launcher\saves`
+  to move saves to another profile.
 - Online play used GameSpy, which is gone.
 - With a portrait main monitor under Wine (no gamescope) the game runs in a
   window you make fullscreen yourself; on Windows it needs a landscape main

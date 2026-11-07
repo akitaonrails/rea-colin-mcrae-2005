@@ -5,6 +5,18 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Changed
+
+- The Widescreen look now caps the game at 60 fps (VSync stays on), which
+  keeps its frame-rate-timed animations steady; the Picture tab's
+  Frame-rate cap raises it if wanted. As before, the cap works under Wine
+  and Proton only.
+- The README says where the game's own options live: advanced particles,
+  post processing effects, texture and shadow settings, EAX 4.0, Vsync and
+  refresh rate, and controller calibration and vibration. It also says
+  how to cap animations at 60 fps on Windows, and that saves are per Windows
+  user.
+
 ## [0.2.2] - 2026-11-05
 
 To avoid antivirus false positives: a player's antivirus flagged another

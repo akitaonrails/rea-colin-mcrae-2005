@@ -1,6 +1,6 @@
 flags: --look widescreen
 screen: 2560x1440, Wine: false
-picture: resolution 2560x1440, fps_limit 0, vsync on
+picture: resolution 2560x1440, fps_limit 60, vsync on
 
 arguments: WIDESCREENDISPLAY
 components installed: rea_close_hook.dll

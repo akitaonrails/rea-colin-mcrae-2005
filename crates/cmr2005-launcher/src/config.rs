@@ -81,7 +81,8 @@ pub const OPTIONS: &[OptionSpec] = &[
         "fps_limit",
         Kind::Range { min: 0, max: 1000 },
         "Frame-rate cap",
-        "The most frames per second the game draws; 0 or off for no cap. Under Wine and Proton only.",
+        "The most frames per second the game draws; 0 or off for no cap. 60 keeps the \
+         game's frame-rate-timed animations steady. Under Wine and Proton only.",
     )
     .with_value_aliases(&[("off", "0")])
     .with_example("60"),
@@ -153,7 +154,8 @@ impl Look {
 
     /// The look's values on `screen` (each seen in the game,
     /// docs/RUNTIME_NOTES.md). Original keeps the game's own size and
-    /// leaves the frame rate alone.
+    /// leaves the frame rate alone; Widescreen and Steam Deck cap at 60,
+    /// which keeps the game's frame-rate-timed animations steady.
     pub fn picture(self, screen: Option<(u32, u32)>) -> Picture {
         match self {
             Look::Original => Picture {
@@ -165,7 +167,7 @@ impl Look {
                 let (w, h) = display::largest_16_9(screen, MAX_SIZE, FALLBACK_SIZE);
                 Picture {
                     resolution: Some(Resolution::Size(w, h)),
-                    fps_limit: Some(0),
+                    fps_limit: Some(60),
                     vsync: Some(true),
                 }
             }
@@ -406,7 +408,7 @@ mod tests {
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(settings.look, Some(Look::Widescreen));
         assert_eq!(settings.resolution, Some(Resolution::Size(2560, 1440)));
-        assert_eq!(settings.fps_limit, Some(0));
+        assert_eq!(settings.fps_limit, Some(60));
         assert_eq!(settings.vsync, Some(true));
         let deck = parse_file(&first_run_text(Some((800, 1280)))).0;
         assert_eq!(deck.look, Some(Look::SteamDeck));
@@ -422,6 +424,12 @@ mod tests {
         assert_eq!(size(Some((1920, 1200))), Some(Resolution::Size(1920, 1080)));
         assert_eq!(size(Some((1080, 1920))), Some(Resolution::Size(1920, 1080)));
         assert_eq!(size(None), Some(Resolution::Size(1920, 1080)));
+    }
+
+    #[test]
+    fn the_widescreen_look_caps_at_60_frames_per_second() {
+        assert_eq!(Look::Widescreen.picture(None).fps_limit, Some(60));
+        assert_eq!(Look::Original.picture(None).fps_limit, Some(0));
     }
 
     #[test]
