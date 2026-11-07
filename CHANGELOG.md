@@ -7,6 +7,9 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ### Changed
 
+- Updated rea-launcher-sdk to v0.4.4: the AppImage's portable Wine is
+  now 11.21, which fixes the startup crash on machines that cannot
+  reserve ~64 GiB of address space (16 GB handhelds).
 - The Widescreen look now caps the game at 60 fps (VSync stays on), which
   keeps its frame-rate-timed animations steady; the Picture tab's
   Frame-rate cap raises it if wanted. As before, the cap works under Wine
