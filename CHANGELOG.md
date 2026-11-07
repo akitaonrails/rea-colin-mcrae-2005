@@ -5,6 +5,8 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-07
+
 ### Changed
 
 - Updated rea-launcher-sdk to v0.4.4: the AppImage's portable Wine is
