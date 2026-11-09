@@ -172,8 +172,10 @@ pub fn check(settings: &Settings, cwd: &Path) -> Result<(PathBuf, Source), Strin
     Ok((game, source))
 }
 
-/// The `--check` report for a playable folder.
-pub fn check_report(game: &Path, source: &Source) -> String {
+/// The `--check` report for a playable folder. `unpacked`: where the
+/// first Play unpacks GOG's installer (`saves::Folders::unpacked`); `--check`
+/// itself never unpacks.
+pub fn check_report(game: &Path, source: &Source, unpacked: &Path) -> String {
     match source {
         Source::Installed { found, .. } => format!(
             "Ready to play: {} ({}) in {}",
@@ -182,9 +184,9 @@ pub fn check_report(game: &Path, source: &Source) -> String {
             game.display()
         ),
         Source::Installer(installer) => format!(
-            "Ready to play: {} in {}. The first start unpacks the game (about 3.6 GB).",
-            installer.build.name,
-            game.display()
+            "Ready to play from {}. {}",
+            game.display(),
+            source::installer_plan(installer, Some(unpacked))
         ),
     }
 }

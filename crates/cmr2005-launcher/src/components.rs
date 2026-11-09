@@ -15,7 +15,9 @@
 //!   the game and it attaches itself; the launcher never hooks the
 //!   running game.
 //! - innoextract (`innoextract.exe`, zlib), which unpacks GOG's installer
-//!   ([`crate::source`]); it is never copied into the runtime.
+//!   (`rea_launcher_win32::innoextract`, [`crate::source`]); needed only
+//!   when the game folder holds the installer, never copied into the
+//!   runtime.
 
 use std::path::Path;
 
@@ -29,6 +31,7 @@ pub const DIR: &str = "components";
 
 pub const DXVK_DLL: &str = "d3d9.dll";
 pub const CLOSE_HOOK_DLL: &str = "rea_close_hook.dll";
+/// `rea_launcher_win32::innoextract::EXE`.
 pub const INNOEXTRACT: &str = "innoextract.exe";
 
 /// The close hook's configuration, set on the game as `REA_CLOSE_HOOK`:
@@ -54,19 +57,22 @@ pub fn version(name: &str) -> &'static str {
 }
 
 /// The bundled files a launch needs: DXVK under Wine, the close hook
-/// always.
-pub fn needed(wine: bool) -> Vec<&'static str> {
+/// always, innoextract when the game is still GOG's installer.
+pub fn needed(wine: bool, installer: bool) -> Vec<&'static str> {
     let mut names = Vec::new();
     if wine {
         names.push(DXVK_DLL);
     }
     names.push(CLOSE_HOOK_DLL);
+    if installer {
+        names.push(INNOEXTRACT);
+    }
     names
 }
 
 /// The missing ones of [`needed`] in `components`, as a message.
-pub fn validate(components: &Path, wine: bool) -> Result<(), String> {
-    let missing: Vec<&str> = needed(wine)
+pub fn validate(components: &Path, wine: bool, installer: bool) -> Result<(), String> {
+    let missing: Vec<&str> = needed(wine, installer)
         .into_iter()
         .filter(|name| !components.join(name).is_file())
         .collect();
@@ -74,9 +80,12 @@ pub fn validate(components: &Path, wine: bool) -> Result<(), String> {
         Ok(())
     } else {
         let verb = if missing.len() == 1 { "is" } else { "are" };
+        let names = match missing.split_last() {
+            Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+            _ => missing.join(""),
+        };
         Err(format!(
-            "The launcher's {} {verb} missing in {}. Unpack the whole launcher package again.",
-            missing.join(" and "),
+            "The launcher's {names} {verb} missing in {}. Unpack the whole launcher package again.",
             components.display()
         ))
     }
@@ -146,9 +155,17 @@ mod tests {
     }
 
     #[test]
-    fn dxvk_is_needed_only_under_wine() {
-        assert_eq!(needed(true), [DXVK_DLL, CLOSE_HOOK_DLL]);
-        assert_eq!(needed(false), [CLOSE_HOOK_DLL]);
+    fn dxvk_is_needed_only_under_wine_and_innoextract_only_for_the_installer() {
+        assert_eq!(needed(true, false), [DXVK_DLL, CLOSE_HOOK_DLL]);
+        assert_eq!(needed(false, false), [CLOSE_HOOK_DLL]);
+        assert_eq!(needed(false, true), [CLOSE_HOOK_DLL, INNOEXTRACT]);
+        assert_eq!(needed(true, true), [DXVK_DLL, CLOSE_HOOK_DLL, INNOEXTRACT]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn innoextract_has_the_sdks_name() {
+        assert_eq!(INNOEXTRACT, rea_launcher_win32::innoextract::EXE);
     }
 
     #[test]
@@ -156,14 +173,24 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cmr2005-components-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        let error = validate(&dir, true).unwrap_err();
+        let error = validate(&dir, true, false).unwrap_err();
         assert!(
             error.contains("d3d9.dll and rea_close_hook.dll are missing"),
             "{error}"
         );
+        let error = validate(&dir, true, true).unwrap_err();
+        assert!(
+            error.contains("d3d9.dll, rea_close_hook.dll and innoextract.exe are missing"),
+            "{error}"
+        );
         fs::write(dir.join(CLOSE_HOOK_DLL), b"hook").unwrap();
-        assert!(validate(&dir, false).is_ok());
-        let error = validate(&dir, true).unwrap_err();
+        assert!(validate(&dir, false, false).is_ok());
+        let error = validate(&dir, false, true).unwrap_err();
+        assert!(
+            error.contains("launcher's innoextract.exe is missing"),
+            "{error}"
+        );
+        let error = validate(&dir, true, false).unwrap_err();
         assert!(error.contains("launcher's d3d9.dll is missing"), "{error}");
         let described = describe(&dir);
         assert_eq!(described.len(), 1);

@@ -7,7 +7,8 @@
 //!   `--help`, the template and the window rows.
 //! - [`cli`]: what a command line asks for, and the `--check` report.
 //! - [`form`]: the settings window's state as `launcher.cfg` text.
-//! - [`source`]: an installed game, or GOG's installer to unpack.
+//! - [`source`]: an installed game, or GOG's installer to unpack (the
+//!   SDK's `rea_launcher::installer`).
 //! - [`runtime`]: the private runtime copy of the game folder.
 //! - [`saves`]: the launcher's folders and the saves folder.
 //! - [`registry`]: the game's registry key and what a launch writes.
@@ -19,6 +20,9 @@
 /// title ("Colin McRae Rally 2005"): a second start brings this window
 /// forward (`rea_launcher_win32::instance::Window::Own`), never the game's.
 pub const WINDOW_TITLE: &str = "Colin McRae Rally 2005 Launcher";
+
+/// The game's title, for the windows and messages.
+pub const GAME_TITLE: &str = "Colin McRae Rally 2005";
 
 /// The single-instance name: one launcher at a time per user session (a
 /// named mutex on Windows, per prefix under Wine).

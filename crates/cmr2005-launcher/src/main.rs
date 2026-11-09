@@ -34,13 +34,14 @@ mod app {
     use rea_launcher::{cfg, fsx, paths};
     use rea_launcher_win32::dialog::{self, Icon};
     use rea_launcher_win32::gpu::{self, Glx};
+    use rea_launcher_win32::innoextract::Unpacked;
     use rea_launcher_win32::instance::{self, SecondStart, Window};
     use rea_launcher_win32::process::{self, Launch};
     use rea_launcher_win32::reg::Key;
     use rea_launcher_win32::report;
-    use rea_launcher_win32::{disk, display, wine};
+    use rea_launcher_win32::{display, wine};
 
-    const TITLE: &str = "Colin McRae Rally 2005";
+    const TITLE: &str = cmr2005_launcher::GAME_TITLE;
 
     /// `%LOCALAPPDATA%\CMR2005Launcher`: launcher.cfg, launcher.log and the
     /// runtime copy.
@@ -91,6 +92,15 @@ mod app {
 
         fn warn(&self, message: &str) {
             self.log.line(&format!("warning: {message}"));
+        }
+
+        /// Information for the player while preparing to play: the log,
+        /// and stdout when it leads somewhere; never a dialog to wait on.
+        fn tell(&self, text: &str) {
+            self.log.line(text);
+            if report::route_here(self.mode).print {
+                println!("{TITLE}: {text}");
+            }
         }
     }
 
@@ -196,19 +206,26 @@ mod app {
         for warning in &warnings {
             out.warn(warning);
         }
+        let game_from_command_line = invocation.flags.game.is_some();
         let settings = saved.clone().merged(invocation.flags);
         let cwd = std::env::current_dir().unwrap_or_default();
         let (game, source) = cli::check(&settings, &cwd)?;
         out.log
             .line(&format!("game: {} ({})", game.display(), source.describe()));
+        let folders = Folders::new(&home(), settings.runtime.as_deref());
         if invocation.mode == Mode::Check {
-            out.say(&cli::check_report(&game, &source));
+            out.say(&cli::check_report(&game, &source, &folders.unpacked));
             return Ok(cli::OK);
         }
-        if first_run || saved.game.as_ref() != Some(&game) {
-            let text = config::set(&text, "game", &game.display().to_string());
-            fsx::write_atomic(&path, text)
+        let save = |text: &str, game: &Path| -> Result<String, String> {
+            let text = config::set(text, "game", &game.display().to_string());
+            fsx::write_atomic(&path, &text)
                 .map_err(|error| format!("Cannot save {}: {error}", path.display()))?;
+            Ok(text)
+        };
+        let mut text = text;
+        if first_run || saved.game.as_ref() != Some(&game) {
+            text = save(&text, &game)?;
         }
 
         let wine = wine::is_wine();
@@ -216,12 +233,12 @@ mod app {
             .ok()
             .and_then(|exe| exe.parent().map(|dir| dir.join(components::DIR)))
             .ok_or("Cannot find the launcher's components folder.")?;
-        components::validate(&components_dir, wine)?;
+        let from_installer = matches!(source, Source::Installer(_));
+        components::validate(&components_dir, wine, from_installer)?;
         for line in components::describe(&components_dir) {
             out.log.line(&format!("component {line}"));
         }
 
-        let folders = Folders::new(&home(), settings.runtime.as_deref());
         // A launcher that was killed released the instance, but its game
         // may still run from the runtime copy: never prepare under it.
         if !process::find_running(&folders.runtime.join(edition::GAME_EXE)).is_empty() {
@@ -236,6 +253,14 @@ mod app {
                 if !unpack(out, installer, &folders.unpacked, &components_dir)? {
                     return Ok(cli::OK);
                 }
+                // The next start finds an installed game: the game setting
+                // points at the unpacked folder (unless it came from --game).
+                let unpacked =
+                    source::setting_after_unpack(&folders.unpacked, game_from_command_line);
+                if let Some(dir) = &unpacked.save {
+                    save(&text, dir)?;
+                }
+                out.tell(&unpacked.message);
                 folders.unpacked.clone()
             }
         };
@@ -346,119 +371,30 @@ mod app {
         Ok(code as i32)
     }
 
-    /// innoextract running, watched by the unpack window.
-    struct InnoJob {
-        running: Launched,
-        work: PathBuf,
-        dest: PathBuf,
-        done: u64,
-        scanned: Option<std::time::Instant>,
-    }
-
-    type Launched = rea_launcher_win32::process::Running;
-
-    impl ui::UnpackJob for InnoJob {
-        fn done(&mut self) -> u64 {
-            // Counting the files is cheap but not free: twice a second.
-            if self
-                .scanned
-                .is_none_or(|at| at.elapsed() >= std::time::Duration::from_millis(500))
-            {
-                self.done = source::unpacked_so_far(&self.work);
-                self.scanned = Some(std::time::Instant::now());
-            }
-            self.done
-        }
-
-        fn finished(&mut self) -> Option<Result<(), String>> {
-            let code = self.running.exit_code()?;
-            Some(if code == 0 {
-                Ok(())
-            } else {
-                Err(format!(
-                    "Unpacking the game failed (innoextract exit code {code})."
-                ))
-            })
-        }
-
-        fn cancel(&mut self) {
-            let _ = self
-                .running
-                .close_gracefully(std::time::Duration::from_millis(0));
-            let _ = source::abandon(&self.dest);
-        }
-    }
-
-    /// Unpacks GOG's installer with the bundled innoextract, once, showing
-    /// its progress. `Ok(false)`: the player cancelled.
+    /// Unpacks GOG's installer into `dest` with the bundled innoextract,
+    /// once ([`source::unpack`]), showing its progress; with no window it
+    /// is waited for all the same. `Ok(false)`: the player stopped it.
     fn unpack(
         out: &Out,
         installer: &source::Installer,
         dest: &Path,
         components_dir: &Path,
     ) -> Result<bool, String> {
-        let parent = dest.parent().unwrap_or(dest);
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Cannot create {}: {error}", parent.display()))?;
-        let source::Begin::Run { args, work } = source::begin(installer, dest)? else {
-            return Ok(true);
-        };
-        if let Some(free) = disk::free_space(parent)
-            && free < source::UNPACK_BYTES
-        {
-            let _ = source::abandon(dest);
-            return Err(format!(
-                "Unpacking the game needs about {} GB free in {}; there are {:.1} GB.",
-                source::UNPACK_BYTES / 1_000_000_000,
-                parent.display(),
-                free as f64 / 1e9
-            ));
-        }
-        out.log.line(&format!(
-            "unpacking {} into {}",
-            installer.setup.display(),
-            dest.display()
-        ));
-        let innoextract = components_dir.join(components::INNOEXTRACT);
-        let running = Launch::new(&innoextract)
-            .args(args.iter().map(String::as_str))
-            .hidden(true)
-            .spawn()?;
-        let mut job = InnoJob {
-            running,
-            work,
-            dest: dest.to_path_buf(),
-            done: 0,
-            scanned: None,
-        };
-        let result = match ui::show_unpack(installer.build.unpacked, &mut job) {
-            Ok(ui::UnpackOutcome::Finished(result)) => result,
-            Ok(ui::UnpackOutcome::Cancelled) => {
-                out.log.line("unpacking cancelled by the player");
-                return Ok(false);
+        let mut log = |line: &str| out.log.line(line);
+        let exe = components_dir.join(components::INNOEXTRACT);
+        match source::unpack(&exe, installer, dest, &mut log, |job| {
+            ui::show_unpack(installer, job)
+        })? {
+            Unpacked::Ready(done) => {
+                out.log.line(&format!(
+                    "unpacked game: {} ({})",
+                    done.game.exe.display(),
+                    done.game.edition.name
+                ));
+                Ok(true)
             }
-            Err(error) => {
-                // No window: wait for innoextract all the same.
-                out.warn(&format!("unpack window unavailable: {error}"));
-                loop {
-                    if let Some(result) = ui::UnpackJob::finished(&mut job) {
-                        break result;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                }
-            }
-        };
-        if let Err(error) = result {
-            let _ = source::abandon(dest);
-            return Err(error);
+            Unpacked::Cancelled => Ok(false),
         }
-        let found = source::finish(installer, dest)?;
-        out.log.line(&format!(
-            "unpacked: {} ({})",
-            found.exe.display(),
-            found.edition.name
-        ));
-        Ok(true)
     }
 
     /// DXVK in or out through the ledger (a player's own `d3d9.dll`

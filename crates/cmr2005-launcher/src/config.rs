@@ -55,8 +55,11 @@ pub const OPTIONS: &[OptionSpec] = &[
         "game",
         Kind::Path,
         "Game folder",
-        "Your installed game (the folder with cmr5.exe), or the folder with the GOG \
-         installer files (setup_colin2005.exe and its .bin files). It is only read, never changed.",
+        "Your installed game (the folder with cmr5.exe), or the folder with GOG's \
+         installer files (setup_colin2005.exe and its two .bin files). An installer is never \
+         run: the first Play unpacks the game from it once into the launcher's own folder \
+         (about 3.9 GB free space needed) and this setting then points there. The folder you \
+         choose is only read, never changed.",
     ),
     OptionSpec::new(
         "look",

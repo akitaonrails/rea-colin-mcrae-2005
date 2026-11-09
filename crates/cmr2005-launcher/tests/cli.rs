@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use cmr2005_launcher::cli::{self, Invocation, Mode};
 use cmr2005_launcher::config::{self, OPTIONS, Settings};
 use cmr2005_launcher::edition;
+use cmr2005_launcher::source;
 use rea_launcher::cfg::{Kind, Resolution};
 use rea_launcher::identify;
 
@@ -136,6 +137,58 @@ fn check_needs_a_game_folder_with_a_known_edition() {
     );
 }
 
+/// `--check` on GOG's installer says what the first Play does, where and
+/// the space it needs; it never unpacks (nor renames an old marker).
+#[test]
+fn check_on_the_installer_says_what_the_first_play_does() {
+    let dir = scratch("check-installer");
+    let installer = source::Source::Installer(source::Installer {
+        setup: dir.join(source::SETUP_EXE),
+        sha256: source::INSTALLERS[0].sha256,
+        build: &source::INSTALLERS[0].value,
+    });
+    let unpacked = dir.join("AppData").join("game");
+    let report = cli::check_report(&dir, &installer, &unpacked);
+    assert!(
+        report.starts_with(&format!("Ready to play from {}.", dir.display())),
+        "{report}"
+    );
+    for says in [
+        "Found GOG offline installer (v1.1).",
+        "unpacks the game from it once into",
+        "about 3.9 GB free space needed",
+        "never run",
+    ] {
+        assert!(report.contains(says), "{says}: {report}");
+    }
+    assert!(report.contains(&unpacked.display().to_string()), "{report}");
+    assert!(!unpacked.exists(), "--check never unpacks");
+
+    // Launcher 0.2 already unpacked it: --check says so and only reads.
+    std::fs::create_dir_all(&unpacked).unwrap();
+    let old = unpacked.join(source::OLD_MARKER);
+    std::fs::write(&old, identify::hex(&source::INSTALLERS[0].sha256)).unwrap();
+    let report = cli::check_report(&dir, &installer, &unpacked);
+    assert!(report.contains("already unpacked"), "{report}");
+    assert!(old.is_file());
+}
+
+#[test]
+fn check_leaves_an_unknown_installer_alone_with_its_digest() {
+    let dir = scratch("check-unknown-installer");
+    std::fs::write(dir.join(source::SETUP_EXE), b"another setup").unwrap();
+    let game = parse(&["--check", "--game", &dir.display().to_string()])
+        .unwrap()
+        .flags;
+    let error = cli::check(&game, Path::new("/")).unwrap_err();
+    assert!(error.contains("left alone"), "{error}");
+    assert!(
+        error.contains(&identify::hex(&identify::sha256(b"another setup"))),
+        "{error}"
+    );
+    assert!(error.contains(edition::UNKNOWN_EDITION_ISSUE), "{error}");
+}
+
 /// The real program, as a player's terminal or the Linux helper runs it.
 #[cfg(windows)]
 mod program {
@@ -199,6 +252,25 @@ mod program {
             assert!(stdout.contains("--help"), "{args:?}: {stdout}");
             assert!(text(&output.stderr).is_empty(), "{args:?}");
         }
+    }
+
+    #[test]
+    fn check_leaves_an_unknown_installer_alone_and_exits_1() {
+        let dir = scratch("unknown-installer");
+        std::fs::write(dir.join(source::SETUP_EXE), b"another setup").unwrap();
+        let game = dir.display().to_string();
+        let (output, log) = run("unknown-setup", &["--check", "--game", &game]);
+        assert_eq!(output.status.code(), Some(cli::REFUSED));
+        let stdout = text(&output.stdout);
+        assert!(stdout.contains("left alone"), "{stdout}");
+        let digest = identify::hex(&identify::sha256(b"another setup"));
+        assert!(stdout.contains(&digest), "{stdout}");
+        assert!(std::fs::read_to_string(log).unwrap().contains(&digest));
+        assert_eq!(
+            std::fs::read(dir.join(source::SETUP_EXE)).unwrap(),
+            b"another setup",
+            "the installer is only read"
+        );
     }
 
     #[test]
