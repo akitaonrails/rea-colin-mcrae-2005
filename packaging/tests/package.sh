@@ -24,6 +24,31 @@ for p in "$T/dist/CMR2005Launcher-v0.0.0" "$T/dist/CMR2005Launcher-v0.0.0.zip"; 
     fail "allowlist: $(basename "$p"): $(cat "$T/out")"
   fi
 done
+# innoextract (GOG's installer is unpacked with it, never run) ships in the
+# zip with its licences, and in the AppImage's payload.
+for f in components/innoextract.exe licenses/innoextract/innoextract.LICENSE.txt \
+  licenses/innoextract/Boost.LICENSE_1_0.txt licenses/innoextract/liblzma.COPYING.txt; do
+  if [ -f "$T/dist/CMR2005Launcher-v0.0.0/$f" ] \
+    && unzip -l "$T/dist/CMR2005Launcher-v0.0.0.zip" "CMR2005Launcher-v0.0.0/$f" > /dev/null 2>&1; then
+    ok "folder and zip hold $f"
+  else
+    fail "$f is not in the folder and the zip"
+  fi
+done
+if grep -q 'innoextract_bundle "$pkg"' "$ROOT/packaging/package.sh" \
+  && grep -q -- '--payload components' "$ROOT/packaging/package.sh"; then
+  ok "innoextract comes from the SDK's innoextract_bundle and rides in the AppImage payload"
+else
+  fail "package.sh must call innoextract_bundle and pass --payload components to appimage-wine.sh"
+fi
+if grep -q '^innoextract-exe - ' "$ROOT/packaging/third-party.txt" \
+  && sh -c ". '$ROOT/sdk/packaging/innoextract.sh'; innoextract_pins" | grep -v '^#' \
+  | while read -r line; do grep -qxF "$line" "$ROOT/packaging/third-party.txt" || exit 1; done; then
+  ok "third-party.txt pins innoextract as the SDK does"
+else
+  fail "third-party.txt's innoextract pins differ from sdk/packaging/innoextract.sh"
+fi
+
 if REA_STANDIN_COMPONENTS=1 REA_RELEASE_DIR=$T/nowhere sh "$ROOT/packaging/package.sh" --no-appimage "$T/dist/x" > /dev/null 2>&1; then
   fail "a missing exe must fail"
 else

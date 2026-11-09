@@ -32,7 +32,8 @@ chmod +x "$pkg/linux/cmr2005-play"
 cp "$ROOT"/packaging/licenses/* "$pkg/licenses/"
 
 # Third-party components from packaging/third-party.txt, each checked by
-# SHA-256 (the archive, then the one file taken out of it).
+# SHA-256 (the archive, then the one file taken out of it). innoextract
+# comes from the SDK's sdk/packaging/innoextract.sh.
 mkdir -p "$pkg/components" "$pkg/licenses/innoextract"
 if [ "${REA_STANDIN_COMPONENTS:-}" = 1 ]; then
   # packaging/tests: stand-ins, no network and no build.
@@ -44,6 +45,7 @@ if [ "${REA_STANDIN_COMPONENTS:-}" = 1 ]; then
   done
 else
   . "$ROOT/sdk/packaging/pins.sh"
+  . "$ROOT/sdk/packaging/innoextract.sh"
   PIN_FILE=$ROOT/packaging/third-party.txt
   [ -n "${REA_CACHE:-}" ] && PIN_CACHE=$REA_CACHE/pins
   work=$(mktemp -d)
@@ -54,11 +56,10 @@ else
   pin_verify "$work/dxvk-3.1.1/x32/d3d9.dll" "$(pin_sha dxvk-d3d9)"
   cp "$work/dxvk-3.1.1/x32/d3d9.dll" "$pkg/components/d3d9.dll"
 
-  zip=$(pin_fetch innoextract "$work")
-  unzip -q "$zip" innoextract.exe 'license/*' -d "$work/innoextract"
-  pin_verify "$work/innoextract/innoextract.exe" "$(pin_sha innoextract-exe)"
-  cp "$work/innoextract/innoextract.exe" "$pkg/components/innoextract.exe"
-  cp "$work/innoextract/license/"*.txt "$pkg/licenses/innoextract/"
+  # innoextract 1.9, which unpacks GOG's installer (never runs it):
+  # components/innoextract.exe and licenses/innoextract/*.txt, in the zip
+  # and (below, --payload components) the AppImage.
+  innoextract_bundle "$pkg" "$work"
 
   # The SDK's close hook, built from the pinned SDK (a dependency, not a
   # workspace member; CI builds it next to the launcher).
