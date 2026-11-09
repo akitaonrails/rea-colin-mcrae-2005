@@ -171,6 +171,31 @@ installed game folder or the GOG installer files. From the installer it
 unpacks the game into its own folder (an Inno Setup reader, pinned, no
 manual step), so Linux and Steam Deck players never run `setup_colin2005.exe`.
 
+### GOG's installer in the launcher (SDK v0.5.0, 2026-11-09)
+
+| Item | Value |
+|---|---|
+| Setup program | `setup_colin2005.exe`, SHA-256 `690a5e3f203e84a49fa0bad1a5e9bb628adce3f0b5a6e0349409484b737a8240` |
+| Data parts (exact sizes) | `setup_colin2005-1.bin` 2,097,272,064 bytes; `setup_colin2005-2.bin` 985,406,510 bytes |
+| Format | Inno Setup 5.4.2, not passworded; GOG's official offline installer, not a repack |
+| Unpacked game (`app\`) | 5,218 files, 3,564,462,813 bytes; `cmr5.exe` is the known GOG v1.1 build |
+| Collisions / files the launcher bundles | none: innoextract's `--collisions=rename` leaves no `X#component` copies; the installer adds no wrapper or fix (`prefer` and `drop` are empty) |
+
+**Observed (2026-11-09):** the Linux innoextract 1.9 and the launcher's
+own code path (the SDK's `innoextract::unpack` with innoextract 1.9's
+Windows build under Wine, `tests/real_installer.rs`) produced identical
+folders (`diff -r`: only the launcher's `.rea-unpacked` marker differs).
+There is no installed copy of this game to compare against (both of the
+owner's folders are the installer); the reference is the Linux
+innoextract's output, already checked against the GOG listing's
+`cmr5.exe` MD5 above and played (RUNTIME_NOTES.md).
+
+**Decision:** the unpacking code moved from this launcher into the SDK
+(`rea_launcher::installer`, v0.5.0); the launcher keeps the installer
+table, its game check and the rename of its 0.2 marker
+(`.cmr2005-unpacked` → `.rea-unpacked`). After an unpack the `game`
+setting points at the unpacked folder (unless it came from `--game`).
+
 ## Owner decisions (2026-11-02)
 
 - Launcher id `cmr2005`, environment prefix `CMR2005_`, program

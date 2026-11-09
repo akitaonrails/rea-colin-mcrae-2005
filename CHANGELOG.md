@@ -5,6 +5,35 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Added
+
+- Once the game is unpacked from GOG's installer, the **Game folder**
+  setting points at the unpacked folder (`launcher.cfg`), so later starts
+  find an installed game and the installer files are no longer needed;
+  `launcher.log` says so. A folder given with `--game` is never saved
+  over: the log names the unpacked folder instead. Players who unpacked
+  with 0.2 get the same on their next start, without unpacking again.
+- `--check` on the installer folder says what the first Play does, where
+  the game is unpacked and how much free space it needs (or that it is
+  unpacked already); it never unpacks.
+- The settings window's note under the game folder says the same for the
+  installer, and for the unpacked folder that the installer files are no
+  longer needed.
+- Any other Inno Setup installer in the game folder is left alone and
+  reported with its SHA-256, like an unknown `setup_colin2005.exe`.
+
+### Changed
+
+- Updated rea-launcher-sdk to v0.5.0. The installer unpacking, its
+  progress window and innoextract's packaging are now the SDK's (they
+  were moved there from this launcher); the behaviour is the same. The
+  unpack window's button is now **Stop unpacking** (also Escape and the
+  pad's B), and the free-space check asks for the game plus a tenth
+  (about 3.9 GB). The unpacked folder's marker is now `.rea-unpacked`;
+  the 0.2 marker `.cmr2005-unpacked` is renamed on the next start.
+- innoextract is checked at start like the other components when the game
+  folder holds the installer.
+
 ## [0.2.3] - 2026-11-07
 
 ### Changed

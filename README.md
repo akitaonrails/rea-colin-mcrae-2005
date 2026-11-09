@@ -42,11 +42,13 @@ This project contains no game files: you need your own copy of the game.
 ## What you need
 
 - Colin McRae Rally 2005 for PC, the **GOG** release (version 1.1). Either
-  the installed game, the folder with `cmr5.exe`, or the three installer
-  files you downloaded from GOG (`setup_colin2005.exe`,
+  the installed game, the folder with `cmr5.exe`, or the folder with the
+  three installer files you downloaded from GOG (`setup_colin2005.exe`,
   `setup_colin2005-1.bin`, `setup_colin2005-2.bin`).
-- About 3.5 GB free if you start from the installer files: the launcher
-  unpacks the game once.
+- About 3.9 GB free if you start from the installer files: the launcher
+  unpacks the game once, into a folder of its own (see **Where things
+  are**). The installer is never run and its folder is only read; any
+  other installer is left alone and reported.
 - The retail DVD versions use StarForce copy protection and are not
   supported.
 
@@ -120,9 +122,14 @@ More, including a distrobox, in [linux/README.md](linux/README.md).
 3. Press **Play** (or Enter).
 
 From the installer files, the first start unpacks the game, about 3.6 GB,
-in a window that shows the progress and the time left (about three
-minutes in testing). **Cancel** stops it and leaves nothing behind. After
-that, starts are quick.
+with the bundled innoextract, in a window that shows the progress and the
+time left (about three minutes in testing). **Stop unpacking** (or Escape,
+or the pad's B) stops it and leaves nothing behind. The installer itself
+is never run, and its files are only read. Once the game is unpacked, the
+**Game folder** setting points at the unpacked folder, so later starts are
+quick and the installer files are no longer needed (`launcher.log` says
+so). When the folder came from `--game` on the command line, the setting
+is left as it is and the log names the unpacked folder to use instead.
 
 Then set up the game itself in its own **Options** menu: the graphics
 detail and effects, and your gamepad (see **Gamepad** below). The
@@ -191,7 +198,7 @@ filled in.
 
 | `launcher.cfg` / flag | In the window | Values | Unset | What it changes |
 | --- | --- | --- | --- | --- |
-| `game` / `--game` | Play: Game folder | a folder | asked in the window | Your installed game, or the folder with GOG's installer files. Only read. |
+| `game` / `--game` | Play: Game folder | a folder | asked in the window | Your installed game, or the folder with GOG's installer files (unpacked once, never run; the setting then points at the unpacked folder). Only read. |
 | `look` / `--look` | Play: the look cards | `original`, `widescreen`, `steam_deck` | none | Sets the resolution, cap and VSync at once; options set after it win. |
 | `resolution` / `--resolution` | Picture: Resolution | `WIDTHxHEIGHT`, `original` | the game's own | The picture size. A 16:9 size gets the widescreen view. |
 | `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | `0`–`1000`, `off` | no cap | The most frames per second. 60 keeps the game's animations steady. Under Wine and Proton only. |
@@ -246,12 +253,14 @@ Registry entries the launcher writes:
 
 ## Troubleshooting
 
-- **"This cmr5.exe is not a build this launcher knows"** (or the same for
-  `setup_colin2005.exe`): your copy is a version the launcher has not seen.
+- **"This cmr5.exe is not a build this launcher knows":** your copy is a version the launcher has not seen.
   [Report the code it shows](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=unknown-edition.yml).
 - **A .bin file "is missing" or "has … bytes":** the installer download is
   incomplete. Download it again from GOG.
-- **"Unpacking the game needs about 3 GB free":** free some space, or set
+- **"setup_colin2005.exe is an installer this launcher doesn't know"** (or
+  another installer's name): it was left alone, nothing was unpacked.
+  [Report the code it shows](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=unknown-edition.yml).
+- **"Unpacking the game needs about 3.9 GB free":** free some space, or set
   `runtime` to a folder on another drive (the unpacked game goes beside it).
 - **Alt+F4 does nothing in the game:** the game keeps the keyboard to
   itself. The launcher reads Alt+F4 from the keyboard, but the game only
@@ -311,7 +320,7 @@ Registry entries the launcher writes:
    inside the prefix on Linux. The next steps delete them.
 2. Delete the launcher's folder (or the AppImage).
 3. Windows: delete `%LOCALAPPDATA%\CMR2005Launcher` (settings, log, the
-   private copy, and the unpacked game, about 3.5 GB). In the registry
+   private copy, and the unpacked game, about 3.6 GB). In the registry
    (`regedit`), delete the value named after the private copy's `cmr5.exe`
    (`…\CMR2005Launcher\runtime\cmr5.exe`) under `HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences`.
    Keep the game's key (`…\CODEMASTERS\Colin McRae Rally 2005`, in

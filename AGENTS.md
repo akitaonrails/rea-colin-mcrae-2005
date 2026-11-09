@@ -3,7 +3,7 @@
 This repository makes the player's own copy of **Colin McRae Rally 2005** run on modern
 Windows and Linux (Proton/Wine, AppImage) with a settings window, sensible
 defaults and no manual steps. It is built on
-[rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk) v0.4.3.
+[rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk) v0.5.0.
 
 **Read `sdk/docs/STANDARDS.md` before any work; the playbooks are in
 `sdk/docs/playbooks/`** (vendored from the SDK at the tag in `sdk/VERSION`).
@@ -89,7 +89,10 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   start; the launcher never hooks the running game (antivirus).
 - **Owner decisions (2026-11-02):** id `cmr2005`; accept an installed
   folder or the GOG installer files (the launcher unpacks the installer,
-  which hangs under Wine); on Windows write the registry values per user
+  which hangs under Wine, with the SDK's `rea_launcher::installer`;
+  `source.rs` holds the installer table and renames 0.2's
+  `.cmr2005-unpacked` marker to `.rea-unpacked`; afterwards the `game`
+  setting points at the unpacked folder unless it came from `--game`); on Windows write the registry values per user
   through the VirtualStore, no admin. Never use the "64-bit patch" (it
   restores StarForce's `protect.dll`).
 - **Known problems and their status:** startup crash fixed (verified to the

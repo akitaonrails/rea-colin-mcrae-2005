@@ -78,7 +78,8 @@ CMR2005_RUN="distrobox enter gaming --" linux/cmr2005-play
 
 - **GOG's installer hangs under Wine:** don't run it. Point the launcher
   at the folder with `setup_colin2005.exe` and its two `.bin` files; it
-  unpacks the game itself.
+  unpacks the game itself, once (about 3.9 GB free needed), and then
+  points its game folder setting at the unpacked copy.
 - **The game window doesn't close on Alt+F4 inside gamescope:** hold
   Alt+F4 and move the mouse, or close it with `linux/cmr2005-play stop`
   or Ctrl+C in the terminal.

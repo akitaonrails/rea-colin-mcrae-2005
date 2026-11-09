@@ -50,7 +50,7 @@ Status: ✅ verified · ⚠️ partly (see notes) · ❌ fails · — not yet ch
 |---|---|---|
 | Hostile paths (spaces, apostrophes, accents) for install, game and runtime | — | |
 | `launcher.cfg` saved in a Windows code page | — | |
-| Upgrade from an earlier release's files | — (no earlier release) | |
+| Upgrade from an earlier release's files | ✅ 0.2's unpacked folder (`.cmr2005-unpacked`) reused and the setting moved to it (2026-11-09) | |
 | Gamepad-only use of the window | — | |
 
 ## Log
@@ -395,6 +395,28 @@ Still unverified: whether capping at 60 fixes the reported driver
 animations (the reporter's system is Windows, where the launcher's cap does
 not apply), and the 4:3 shape of the intro videos (inferred from the
 stretching report, not measured).
+
+### 2026-11-09: GOG's installer through the SDK's installer module (v0.5.0)
+
+Release i686 build; innoextract 1.9's Windows build
+(`946bd06d…`); the owner's GOG installer, read-only from the NAS; system
+Wine in the `gaming` box, headless (`sdk/scripts/wine-test`'s prefix, null
+graphics driver, no display variables). Output under `.work/inst-0.3/`,
+deleted after the checks.
+
+| Check | Result |
+|---|---|
+| Linux `innoextract 1.9 --collisions=rename --include app` (reference) | 63 s, exit 0, 5,218 files, 3,564,462,813 bytes, no `#` collision copies |
+| `tests/real_installer.rs` under `sdk/scripts/wine-test` (`source::detect` → `source::unpack`, no window: the SDK waits for innoextract) | ✅ 140 s; `cmr5.exe` PC v1.1 (GOG); no preferred/removed/dropped files; work folder gone |
+| The launcher's folder against the reference, `diff -r` | ✅ identical; only `.rea-unpacked` (the setup's SHA-256) added |
+| Same test: `.rea-unpacked` renamed back to 0.2's `.cmr2005-unpacked`, then `source::unpack` with no innoextract present | ✅ reused at once, marker renamed back, never unpacked again |
+| `CMR2005Launcher.exe --check --game <unpacked folder>` | ✅ "Ready to play: cmr5.exe (PC v1.1 (GOG)) in …" |
+| `CMR2005Launcher.exe --check --game <installer folder>` | ✅ "Found GOG offline installer (v1.1). The first Play unpacks the game from it once into C:\users\…\CMR2005Launcher\game (about 3.9 GB free space needed there)…"; nothing written |
+| Play (`--no-window`) as a 0.2 player: `launcher.cfg` `game` = the installer folder, the unpacked folder in `%LOCALAPPDATA%\CMR2005Launcher\game` with the 0.2 marker | ✅ log: marker renamed, "unpacked game: …cmr5.exe (PC v1.1 (GOG))", "The game was unpacked into …\game. The game folder setting now points there; the installer files are no longer needed."; `launcher.cfg` now `game = C:\users\…\CMR2005Launcher\game`; runtime prepared and the game started (stopped by the test's timeout); the next `--check` reads it as an installed game |
+
+Not checked here: the SDK unpack window on a real desktop (the launcher
+falls back to waiting when no window opens, as above), and the unpack on
+Windows and in the AppImage (unchanged innoextract; 0.2's runs above).
 
 ### Not verified yet
 
