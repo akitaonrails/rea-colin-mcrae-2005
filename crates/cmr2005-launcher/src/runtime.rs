@@ -9,7 +9,7 @@
 //! `SG\BESTTIMES_GHOSTS` were written, and those go to the saves folder).
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rea_launcher::runtime::{self, Policy, Stamp, SyncReport};
 use rea_launcher::{fsx, paths};
@@ -65,35 +65,34 @@ fn sync(game: &Path, runtime: &Path) -> io::Result<SyncReport> {
 /// hook's DLL (`rea_close_hook.dll`) added to its import table, so Windows
 /// loads it with the game and the launcher never touches the running game
 /// (antivirus heuristics take a hook installed from outside for a
-/// keylogger). An exe that can't take the import comes back unchanged,
-/// with the reason: the game then runs without the close hook.
-pub fn game_exe(bytes: &[u8]) -> (Vec<u8>, Option<String>) {
-    match rea_close_hook::import_into(bytes) {
-        Ok(with_hook) => (with_hook, None),
-        Err(error) => (
-            bytes.to_vec(),
-            Some(format!(
-                "the close hook can't be added to {GAME_EXE} ({error}); Alt+F4 and closing the window may not end the game"
-            )),
-        ),
-    }
+/// keylogger). The DLL also gives the game its registry key from HKCU
+/// (`registry::REDIRECT`), so an exe that can't take the import is an
+/// error: the game would not find its folders. `--check` asks the same.
+pub fn game_exe(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    rea_close_hook::import_into(bytes)
+        .map_err(|error| format!("{GAME_EXE} can't import {} ({error})", rea_close_hook::DLL))
+}
+
+/// The player's `cmr5.exe` in `game`, and its bytes.
+pub fn read_game_exe(game: &Path) -> Result<(PathBuf, Vec<u8>), String> {
+    let source = paths::find_ignoring_case(game, GAME_EXE)
+        .ok_or_else(|| format!("There is no {GAME_EXE} in {}.", game.display()))?;
+    let bytes = std::fs::read(&source)
+        .map_err(|error| format!("Cannot read {}: {error}", source.display()))?;
+    Ok((source, bytes))
 }
 
 /// Writes `runtime`'s `cmr5.exe` from the one in `game` on every start
 /// ([`game_exe`]): always from the player's bytes, so the import is added
 /// once, whatever an earlier start left there. The player's file is only
-/// read. `Ok(Some(warning))`: written without the close hook.
-pub fn write_game_exe(game: &Path, runtime: &Path) -> Result<Option<String>, String> {
-    let source = paths::find_ignoring_case(game, GAME_EXE)
-        .ok_or_else(|| format!("There is no {GAME_EXE} in {}.", game.display()))?;
-    let bytes = std::fs::read(&source)
-        .map_err(|error| format!("Cannot read {}: {error}", source.display()))?;
-    let (exe, warning) = game_exe(&bytes);
+/// read.
+pub fn write_game_exe(game: &Path, runtime: &Path) -> Result<(), String> {
+    let (source, bytes) = read_game_exe(game)?;
+    let exe = game_exe(&bytes)?;
     let name = source.file_name().unwrap_or(GAME_EXE.as_ref());
     let target = runtime.join(name);
     fsx::install(&target, exe)
-        .map_err(|error| format!("Cannot write {}: {error}", target.display()))?;
-    Ok(warning)
+        .map_err(|error| format!("Cannot write {}: {error}", target.display()))
 }
 
 #[cfg(test)]
@@ -138,11 +137,11 @@ mod tests {
         fs::remove_dir_all(&root).unwrap();
     }
 
-    /// Not a PE (or one without room for the import): the game still
-    /// starts, from an unchanged copy, and the log says why the close hook
-    /// is missing. The player's file is never written.
+    /// Not a PE (or one without room for the import): the game would not
+    /// find its registry key without the hook, so nothing is written and
+    /// the reason is given. The player's file is never written.
     #[test]
-    fn an_exe_that_cant_take_the_hook_is_copied_unchanged() {
+    fn an_exe_that_cant_take_the_hook_is_refused() {
         let root = std::env::temp_dir().join(format!("cmr2005-game-exe-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let (game, rt) = (root.join("Jogos d'Ação"), root.join("runtime"));
@@ -155,9 +154,12 @@ mod tests {
         );
 
         fs::write(game.join("CMR5.EXE"), b"MZ not a real exe").unwrap();
-        let warning = write_game_exe(&game, &rt).unwrap().unwrap();
-        assert!(warning.contains("close hook"), "{warning}");
-        assert_eq!(fs::read(rt.join("CMR5.EXE")).unwrap(), b"MZ not a real exe");
+        let error = write_game_exe(&game, &rt).unwrap_err();
+        assert!(
+            error.starts_with("cmr5.exe can't import rea_close_hook.dll"),
+            "{error}"
+        );
+        assert!(!rt.join("CMR5.EXE").exists());
         assert_eq!(
             fs::read(game.join("CMR5.EXE")).unwrap(),
             b"MZ not a real exe"
@@ -180,12 +182,12 @@ mod tests {
         let root = std::env::temp_dir().join(format!("cmr2005-real-exe-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
-        assert_eq!(write_game_exe(&game, &root).unwrap(), None);
+        write_game_exe(&game, &root).unwrap();
         let first = fs::read(root.join(GAME_EXE)).unwrap();
-        assert_eq!(write_game_exe(&game, &root).unwrap(), None);
+        write_game_exe(&game, &root).unwrap();
         assert_eq!(fs::read(root.join(GAME_EXE)).unwrap(), first);
         assert_eq!(
-            game_exe(&first).0,
+            game_exe(&first).unwrap(),
             first,
             "an already hooked exe is unchanged"
         );
@@ -210,9 +212,8 @@ mod tests {
     #[test]
     fn a_pe_takes_the_hook_once() {
         let bytes = fs::read(std::env::current_exe().unwrap()).unwrap();
-        let (hooked, warning) = game_exe(&bytes);
-        assert_eq!(warning, None);
+        let hooked = game_exe(&bytes).unwrap();
         assert_ne!(hooked, bytes);
-        assert_eq!(game_exe(&hooked), (hooked.clone(), None));
+        assert_eq!(game_exe(&hooked).unwrap(), hooked);
     }
 }

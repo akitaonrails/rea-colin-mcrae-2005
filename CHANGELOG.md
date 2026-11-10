@@ -5,6 +5,26 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Fixed
+
+- **No administrator rights needed for the game's settings, on any
+  Windows.** The launcher used to write the game's registry key under
+  `HKEY_LOCAL_MACHINE`; without administrator rights Windows put it in
+  a per-user copy (the VirtualStore) that the game is not guaranteed to
+  see, and then the game can't find its files and crashes at start while
+  `--check` said ready (the same problem as Colin McRae Rally's issue
+  #6). The game's settings now live in
+  `HKEY_CURRENT_USER\Software\Codemasters\Colin McRae Rally 2005`, and
+  `rea_close_hook.dll`, which the game already loads, shows them to the
+  game where it looks for them. Your language, Graphics options and
+  screen size are carried over from where the game kept them before.
+  The launcher reads the values back after writing them: Play and
+  `--check` stop with what is wrong instead of starting a game that
+  can't run. `--check` also says where the settings are, and fails
+  when `rea_close_hook.dll` is missing or the game's exe can't load it.
+- Restoring the Graphics options after the game resets them (0.4.0)
+  works on the new key.
+
 ## [0.4.0] - 2026-11-09
 
 From a player's report on Quiver and issue #1.

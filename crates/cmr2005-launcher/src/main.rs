@@ -25,7 +25,7 @@ mod app {
 
     use cmr2005_launcher::cli::{self, Invocation, Mode};
     use cmr2005_launcher::components::{self, APP_OVERRIDES};
-    use cmr2005_launcher::registry::{self, RegValue};
+    use cmr2005_launcher::registry;
     use cmr2005_launcher::saves::{self, Folders};
     use cmr2005_launcher::source::{self, Source};
     use cmr2005_launcher::{INSTANCE, WINDOW_TITLE, config, edition, plan, runtime, ui};
@@ -37,7 +37,7 @@ mod app {
     use rea_launcher_win32::innoextract::Unpacked;
     use rea_launcher_win32::instance::{self, SecondStart, Window};
     use rea_launcher_win32::process::{self, Launch};
-    use rea_launcher_win32::reg::Key;
+    use rea_launcher_win32::reg::Value;
     use rea_launcher_win32::report;
     use rea_launcher_win32::{display, wine};
 
@@ -213,8 +213,14 @@ mod app {
         out.log
             .line(&format!("game: {} ({})", game.display(), source.describe()));
         let folders = Folders::new(&home(), settings.runtime.as_deref());
+        let components_dir = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join(components::DIR)))
+            .ok_or("Cannot find the launcher's components folder.")?;
         if invocation.mode == Mode::Check {
-            out.say(&cli::check_report(&game, &source, &folders.unpacked));
+            let ready = cli::check_report(&game, &source, &folders.unpacked);
+            let key = registry::check(&check_key(&components_dir, &source, &folders))?;
+            out.say(&format!("{ready}\n{key}"));
             return Ok(cli::OK);
         }
         let save = |text: &str, game: &Path| -> Result<String, String> {
@@ -229,10 +235,6 @@ mod app {
         }
 
         let wine = wine::is_wine();
-        let components_dir = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join(components::DIR)))
-            .ok_or("Cannot find the launcher's components folder.")?;
         let from_installer = matches!(source, Source::Installer(_));
         components::validate(&components_dir, wine, from_installer)?;
         for line in components::describe(&components_dir) {
@@ -319,16 +321,16 @@ mod app {
         install_components(out, &plan, &game_dir, &folders.runtime, &components_dir)?;
         // From the player's bytes on every start, with the close hook in
         // its import table: Windows loads the hook with the game, which
-        // installs itself (REA_CLOSE_HOOK_ATTACH); nothing crosses processes.
-        match runtime::write_game_exe(&game_dir, &folders.runtime)? {
-            None => out.log.line(&format!(
-                "runtime {}: imports {}",
-                edition::GAME_EXE,
-                plan.exe_imports.join(", ")
-            )),
-            Some(warning) => out.warn(&warning),
-        }
-        let before = write_registry(out, &plan)?;
+        // installs itself (REA_CLOSE_HOOK_ATTACH) and gives the game its
+        // registry key from HKCU (REA_REGISTRY); nothing crosses processes.
+        runtime::write_game_exe(&game_dir, &folders.runtime)
+            .map_err(|error| registry::not_ready(&[error]))?;
+        out.log.line(&format!(
+            "runtime {}: imports {}",
+            edition::GAME_EXE,
+            plan.exe_imports.join(", ")
+        ));
+        let before = write_registry(out, plan.registry.clone())?;
         if !plan.app_dll_overrides.is_empty() {
             let applied = wine::app_dll_overrides(edition::GAME_EXE, &APP_OVERRIDES)
                 .map_err(|error| error.to_string())?;
@@ -438,76 +440,77 @@ mod app {
         Ok(())
     }
 
-    /// The game's registry key: HKLM (32-bit view), or the per-user
-    /// VirtualStore when HKLM can't be written (the game reads and writes
-    /// that one too).
-    #[allow(deprecated)] // Replaced by the HKCU key and REA_REGISTRY next.
-    fn game_key() -> Result<(Key, rea_launcher_win32::reg::Place), String> {
-        Key::machine_or_virtual_store(registry::KEY)
-            .map_err(|error| format!("Cannot open the game's registry key: {error}"))
-    }
-
-    fn write_values(key: &Key, writes: &[registry::RegWrite]) -> Result<(), String> {
-        for write in writes {
-            match &write.value {
-                RegValue::String(text) => key.set_string(write.name, text),
-                RegValue::Dword(n) => key.set_dword(write.name, *n),
-            }
-            .map_err(|error| format!("Cannot write the game's registry: {error}"))?;
+    /// Writes the plan's values and the game's old ones (once) to its HKCU
+    /// key and reads them back; stops with what the game would miss.
+    /// Returns the game's screen values from before, for
+    /// [`check_after_run`].
+    fn write_registry(out: &Out, values: Vec<Value>) -> Result<registry::Snapshot, String> {
+        let written = registry::GAME
+            .write(values)
+            .map_err(|mismatches| registry::not_ready(&mismatches))?;
+        if written.carried {
+            out.log.line(&format!(
+                "registry: the game's values carried over from HKLM\\{} (or its VirtualStore copy)",
+                registry::MACHINE_KEY
+            ));
         }
-        Ok(())
-    }
-
-    /// Registry writes as one log line.
-    fn described(writes: &[registry::RegWrite]) -> String {
-        writes
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("; ")
-    }
-
-    /// The game's screen values and Graphics options as they are now.
-    fn snapshot(key: &Key) -> registry::Snapshot {
-        registry::Snapshot {
-            selection: key.string(registry::SELECTION).ok().flatten(),
-            width: key.dword(registry::WIDTH).ok().flatten(),
-            height: key.dword(registry::HEIGHT).ok().flatten(),
-        }
-    }
-
-    /// Writes the plan's registry values; returns the game's values from
-    /// before, for [`check_after_run`].
-    fn write_registry(out: &Out, plan: &plan::Plan) -> Result<registry::Snapshot, String> {
-        let (key, place) = game_key()?;
-        let before = snapshot(&key);
-        write_values(&key, &plan.registry)?;
         out.log.line(&format!(
-            "registry ({}): {}",
-            place.describe(),
-            described(&plan.registry)
+            "registry (HKCU\\{}): {}",
+            registry::USER_KEY,
+            registry::described(&written.values)
         ));
-        Ok(before)
+        Ok(written.before)
+    }
+
+    /// `--check`'s problems with the game's key: the redirect's rules, the
+    /// close hook DLL, the player's `cmr5.exe` taking its import (the
+    /// runtime copy is made from it on every Play), and the paths written
+    /// and read back (the game's old values carried over, as Play does).
+    fn check_key(components_dir: &Path, source: &Source, folders: &Folders) -> Vec<String> {
+        let mut problems = Vec::new();
+        if let Err(error) = registry::redirect() {
+            problems.push(error.to_string());
+        }
+        let dll = components_dir.join(components::CLOSE_HOOK_DLL);
+        if !dll.is_file() {
+            problems.push(format!("{} is missing", dll.display()));
+        }
+        let exe_dir = match source {
+            Source::Installed { dir, .. } => Some(dir),
+            // Not unpacked yet: the first Play unpacks it and checks then.
+            Source::Installer(installer) => {
+                source::unpacked_already(&folders.unpacked, installer).then_some(&folders.unpacked)
+            }
+        };
+        let import = exe_dir.map(|dir| {
+            runtime::read_game_exe(dir).and_then(|(_, bytes)| runtime::game_exe(&bytes))
+        });
+        if let Some(Err(error)) = import {
+            problems.push(error);
+        }
+        let paths = registry::writes(&folders.runtime, &folders.saves, None);
+        if let Err(mismatches) = registry::GAME.write(paths) {
+            problems.extend(mismatches.iter().map(ToString::to_string));
+        }
+        problems
     }
 
     /// After the game exits: when it could not use the size the launcher
     /// set, it ran at 640x480 and reset its Graphics options; put them and
     /// its last size back, and say so (`registry::after_run`).
     fn check_after_run(out: &Out, wanted: Option<(u32, u32)>, before: &registry::Snapshot) {
-        let key = match game_key() {
-            Ok((key, _)) => key,
-            Err(error) => return out.warn(&error),
-        };
-        let outcome = registry::after_run(wanted, before, &snapshot(&key));
+        let outcome = registry::after_run(wanted, before, &registry::GAME.snapshot());
         let registry::AfterRun::Fallback { restore, .. } = &outcome else {
             return;
         };
-        if let Err(error) = write_values(&key, restore) {
-            return out.warn(&error);
-        }
         if !restore.is_empty() {
-            out.log
-                .line(&format!("registry restored: {}", described(restore)));
+            if let Err(mismatches) = registry::GAME.set(restore) {
+                return out.warn(&registry::not_ready(&mismatches));
+            }
+            out.log.line(&format!(
+                "registry restored: {}",
+                registry::described(restore)
+            ));
         }
         let message = outcome.message().unwrap_or_default();
         if outcome.needs_the_player() {

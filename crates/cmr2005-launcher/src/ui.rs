@@ -615,7 +615,7 @@ mod tests {
     }
 
     fn registry(plan: &crate::plan::Plan) -> Vec<String> {
-        plan.registry.iter().map(ToString::to_string).collect()
+        plan.registry.iter().map(crate::registry::shown).collect()
     }
 
     #[test]

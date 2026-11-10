@@ -8,12 +8,13 @@ components taken out: d3d9.dll
 cmr5.exe imports: rea_close_hook.dll
 prefer fast GPU: true
 
-[registry HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005]
+[registry HKCU\Software\Codemasters\Colin McRae Rally 2005]
 INSTALL_PATH = string:"C:\\users\\player\\AppData\\Local\\CMR2005Launcher\\runtime"
 SAVEGAME_PATH = string:"C:\\users\\player\\AppData\\Local\\CMR2005Launcher\\saves"
 
 [environment]
 REA_CLOSE_HOOK=class=PC_CMR5;close_on=sc_close,alt_f4,alt_f4_state;strategy=terminate
 REA_CLOSE_HOOK_ATTACH=1
+REA_REGISTRY=HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005 -> HKCU\Software\Codemasters\Colin McRae Rally 2005
 
 [file dxvk.conf: removed]

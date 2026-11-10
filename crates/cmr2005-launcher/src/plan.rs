@@ -9,7 +9,9 @@ use std::path::Path;
 
 use crate::components::{self, APP_OVERRIDES, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DXVK_DLL};
 use crate::config::Picture;
-use crate::registry::{self, RegWrite};
+use rea_launcher_win32::reg::Value;
+
+use crate::registry;
 use crate::runtime::DXVK_CONF;
 
 /// The command-line switch for the game's widescreen view.
@@ -23,8 +25,9 @@ pub const FORCE_HT_ARG: &str = "FORCEHT";
 /// Everything one launch changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
-    /// Values under `registry::KEY`.
-    pub registry: Vec<RegWrite>,
+    /// Values under `HKCU\registry::USER_KEY`, which the game reads
+    /// through the close hook's redirect (`registry::REDIRECT`).
+    pub registry: Vec<Value>,
     /// Arguments `cmr5.exe` gets.
     pub args: Vec<&'static str>,
     /// Bundled DLLs installed into the runtime.
@@ -141,10 +144,12 @@ pub fn plan_on(
         },
         // The hook DLL, loaded through the import table, installs itself
         // on the game's window thread (`ATTACH_ENV`): the launcher never
-        // touches the running game.
+        // touches the running game. It also sends the game's opens of its
+        // HKLM key to the HKCU key the launcher writes.
         env: vec![
             (rea_close_hook::ENV, CLOSE_HOOK_CONFIG),
             (rea_close_hook::ATTACH_ENV, "1"),
+            (rea_close_hook::registry::ENV, registry::REDIRECT),
         ],
         prefer_fast_gpu: !wine,
         // The desktop is the game's whole screen: its mode, else the monitor.
@@ -173,9 +178,9 @@ impl Plan {
         if let Some((w, h)) = self.virtual_desktop {
             let _ = writeln!(out, "Wine virtual desktop: {DESKTOP_NAME},{w}x{h}");
         }
-        let _ = writeln!(out, "\n[registry HKLM\\{}]", registry::KEY);
-        for write in &self.registry {
-            let _ = writeln!(out, "{write}");
+        let _ = writeln!(out, "\n[registry HKCU\\{}]", registry::USER_KEY);
+        for value in &self.registry {
+            let _ = writeln!(out, "{}", registry::shown(value));
         }
         if !self.app_dll_overrides.is_empty() {
             let _ = writeln!(
@@ -351,6 +356,11 @@ mod tests {
             assert!(plan.installed.contains(&CLOSE_HOOK_DLL), "wine: {wine}");
             assert!(plan.env.contains(&(rea_close_hook::ENV, CLOSE_HOOK_CONFIG)));
             assert!(plan.env.contains(&(rea_close_hook::ATTACH_ENV, "1")));
+            assert!(
+                plan.env
+                    .contains(&(rea_close_hook::registry::ENV, registry::REDIRECT)),
+                "the game reads its key from HKCU (wine: {wine})"
+            );
         }
         assert_eq!(CLOSE_HOOK_DLL, rea_close_hook::DLL);
     }
