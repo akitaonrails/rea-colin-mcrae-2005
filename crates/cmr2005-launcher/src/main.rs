@@ -441,6 +441,7 @@ mod app {
     /// The game's registry key: HKLM (32-bit view), or the per-user
     /// VirtualStore when HKLM can't be written (the game reads and writes
     /// that one too).
+    #[allow(deprecated)] // Replaced by the HKCU key and REA_REGISTRY next.
     fn game_key() -> Result<(Key, rea_launcher_win32::reg::Place), String> {
         Key::machine_or_virtual_store(registry::KEY)
             .map_err(|error| format!("Cannot open the game's registry key: {error}"))
