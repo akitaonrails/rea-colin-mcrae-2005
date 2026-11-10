@@ -79,6 +79,12 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   This was the "Wine dead-end". The launcher always writes both values,
   pointing at its runtime copy and its saves folder. It also reads/writes
   `LANGUAGE`, `WIDTH`, `HEIGHT`, `SELECTION`, `CD_KEY` there.
+  Since 0.4.1 the launcher writes them to
+  `HKCU\Software\Codemasters\Colin McRae Rally 2005` (`registry::USER_KEY`,
+  `GAME.write`: `reg::write_verified`, the old HKLM/VirtualStore values
+  carried over once) and the close hook DLL redirects the game's HKLM
+  opens there (`REA_REGISTRY` = `registry::REDIRECT`). Never write HKLM
+  or the VirtualStore (SDK v0.6.0; rea-colin-mcrae#6).
 - **The game resets its own Graphics options** (`SELECTION`, the option
   words and the adapter's D3D9 ids) and drops to 640×480 when it can't use
   `WIDTH`×`HEIGHT`, finds another adapter, or starts for the first time.
@@ -88,19 +94,20 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   modern Intel); passed unless `advanced_particles = off`.
 - **Files the game writes:** `SG\OPTIONS` and saves under `SAVEGAME_PATH`
   (`BESTTIMES_GHOSTS`, `CAREER_SLOT_*`, `CHAMPIONSHIP_SLOT_*`), plus the
-  registry values above.
+  registry values above (in the HKCU key, through the redirect).
 - **Community components used:** none yet; Xidi planned (see `docs/RESEARCH.md`).
 - **Patches:** none to the game's code; the startup crash needs no patch.
   The runtime copy's `cmr5.exe` imports `rea_close_hook.dll` (SDK v0.4.3,
   `rea_close_hook::import_into`), rebuilt from the player's bytes on every
-  start; the launcher never hooks the running game (antivirus).
+  start; the import is required (it carries the registry redirect), so an
+  exe that can't take it stops Play and `--check`; the launcher never hooks the running game (antivirus).
 - **Owner decisions (2026-11-02):** id `cmr2005`; accept an installed
   folder or the GOG installer files (the launcher unpacks the installer,
   which hangs under Wine, with the SDK's `rea_launcher::installer`;
   `source.rs` holds the installer table and renames 0.2's
   `.cmr2005-unpacked` marker to `.rea-unpacked`; afterwards the `game`
-  setting points at the unpacked folder unless it came from `--game`); on Windows write the registry values per user
-  through the VirtualStore, no admin. Never use the "64-bit patch" (it
+  setting points at the unpacked folder unless it came from `--game`); write the registry values per user
+  (HKCU, no admin; since 0.4.1 never through the VirtualStore). Never use the "64-bit patch" (it
   restores StarForce's `protect.dll`).
 - **Known problems and their status:** startup crash fixed (verified to the
   menus, headless). Verified headless: intro videos, a stage, saves,

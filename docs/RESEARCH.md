@@ -279,12 +279,16 @@ setting points at the unpacked folder (unless it came from `--game`).
 - Launcher id `cmr2005`, environment prefix `CMR2005_`, program
   `CMR2005Launcher.exe`, Linux helper `linux/cmr2005-play`.
 - Game source: an installed folder **or** the GOG installer files (see above).
-- Registry on Windows: the launcher writes `INSTALL_PATH`/`SAVEGAME_PATH`
-  per user, under `HKCU\Software\Classes\VirtualStore\MACHINE\SOFTWARE\WOW6432Node\CODEMASTERS\Colin McRae Rally 2005`,
-  which a non-elevated 32-bit program without a manifest reads in place of
-  HKLM. No admin rights. Wine has no registry virtualization, so this needs
-  one check on a real Windows PC; inside the launcher's own Wine prefix it
-  writes HKLM directly.
+- Registry (0.4.1, SDK v0.6.0): the launcher writes the game's values to
+  `HKCU\Software\Codemasters\Colin McRae Rally 2005` on Windows and Wine
+  alike (`reg::write_verified`, read back), and the close hook DLL in the
+  runtime `cmr5.exe`'s import table sends the game's opens of
+  `HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005` there
+  (`REA_REGISTRY`). No admin rights, and no reliance on the VirtualStore,
+  which the game sees only while UAC registry virtualization is on for it
+  (rea-colin-mcrae#6). Before 0.4.1 the launcher wrote HKLM, falling back
+  to the VirtualStore; the game's own values there (`LANGUAGE`, `WIDTH`,
+  `HEIGHT`, `SELECTION`, `CD_KEY`) are carried over once.
 
 ## The problems the launcher will solve
 

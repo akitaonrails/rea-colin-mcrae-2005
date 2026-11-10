@@ -252,7 +252,7 @@ Registry entries the launcher writes:
 
 | Entry | Where | What |
 | --- | --- | --- |
-| The game's own key | Windows: `HKEY_LOCAL_MACHINE\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005` (`SOFTWARE\WOW6432Node\…` on 64-bit Windows). Without administrator rights Windows keeps it per user in `HKEY_CURRENT_USER\Software\Classes\VirtualStore\MACHINE\SOFTWARE\WOW6432Node\CODEMASTERS\Colin McRae Rally 2005`, and the game reads it from there. Linux: the same key inside the prefix. | `INSTALL_PATH`, `SAVEGAME_PATH`, and `WIDTH`/`HEIGHT` when a look or resolution is set |
+| The game's own settings | `HKEY_CURRENT_USER\Software\Codemasters\Colin McRae Rally 2005`, on Windows (no administrator rights needed) and inside the prefix on Linux. The game looks for them under `HKEY_LOCAL_MACHINE\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005`; `rea_close_hook.dll`, which the launcher's copy of the game loads, shows it this key instead. Settings from an older version of the launcher (in `HKEY_LOCAL_MACHINE` or Windows' per-user VirtualStore copy) are carried over once and left where they were. | `INSTALL_PATH`, `SAVEGAME_PATH`, and `WIDTH`/`HEIGHT` when a look or resolution is set; the game keeps `LANGUAGE`, `SELECTION` (its Graphics options) and `CD_KEY` there too |
 | The fast-GPU preference (Windows only) | `HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences` | a value named after the private copy's `cmr5.exe` (by default `%LOCALAPPDATA%\CMR2005Launcher\runtime\cmr5.exe`): `GpuPreference=2;`, written once, when it isn't there yet |
 | DXVK for the game (Wine and Proton only) | `HKEY_CURRENT_USER\Software\Wine\AppDefaults\cmr5.exe\DllOverrides`, and the launcher's record of it in `HKEY_CURRENT_USER\Software\rea-launcher\DllOverrides\cmr5.exe` | `d3d9` = `native,builtin` |
 | OpenGL through GLX for the settings window (Wine and Proton only) | `HKEY_CURRENT_USER\Software\Wine\X11 Driver` | `UseEGL` = `N`, when it isn't set yet |
@@ -342,10 +342,10 @@ Registry entries the launcher writes:
    private copy, and the unpacked game, about 3.6 GB). In the registry
    (`regedit`), delete the value named after the private copy's `cmr5.exe`
    (`…\CMR2005Launcher\runtime\cmr5.exe`) under `HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences`.
-   Keep the game's key (`…\CODEMASTERS\Colin McRae Rally 2005`, in
-   HKEY_LOCAL_MACHINE or the VirtualStore, see
-   [Where things live](#where-things-live)) if you still play the game
-   without the launcher; otherwise you can delete it.
+   Delete the game's settings, `HKEY_CURRENT_USER\Software\Codemasters\Colin McRae Rally 2005`.
+   A launcher before 0.4.1 also left a key in `HKEY_LOCAL_MACHINE` or
+   the VirtualStore (see [Where things live](#where-things-live)); keep
+   that one if you still play the game without the launcher.
 4. Linux: copy the saves out, then delete `~/.local/share/cmr2005-launcher`
    and `~/.config/cmr2005-launcher`; the registry entries live in that
    prefix and go with it. Under Proton, removing the Steam shortcut offers
@@ -391,11 +391,13 @@ sh <sdk>/scripts/sdk-sync --check .             # sdk/ matches the pinned SDK ta
 2. Brings the game into a private copy, linking the big data files.
 3. Under Wine or Proton, adds DXVK's `d3d9.dll` and writes its `dxvk.conf`
    (frame-rate cap, VSync).
-4. Writes the game's registry values: where its files are, where to save,
-   the screen mode.
+4. Writes the game's registry values to your own part of the registry
+   (no administrator rights) and reads them back: where its files are,
+   where to save, the screen mode.
 5. Starts the game, with `WIDESCREENDISPLAY` at 16:9 sizes, `FORCEHT`
    (Advanced particles on any processor), and a small hook that turns a
-   window close into quitting.
+   window close into quitting and shows the game its settings where it
+   looks for them.
 6. After the game exits, puts the game's graphics options back if it
    dropped to 640×480 and reset them.
 

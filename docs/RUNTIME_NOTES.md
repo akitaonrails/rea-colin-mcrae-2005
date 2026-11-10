@@ -466,13 +466,47 @@ Wine the launcher only writes sizes the display lists (`fit_mode`), so the
 "size refused" message was checked with the game alone (r3) and unit
 tests.
 
+### 2026-11-10: the game's key in HKCU (SDK v0.6.0, `REA_REGISTRY`)
+
+Why: the launcher wrote `HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005`,
+falling back to the VirtualStore without admin rights; the game reads that
+copy only while UAC registry virtualization is on for it
+(rea-colin-mcrae#6). Now the values go to
+`HKCU\Software\Codemasters\Colin McRae Rally 2005` and the close hook DLL
+redirects the game's opens of the HKLM key there.
+
+Setup: dev package (`packaging/package.sh --no-appimage`, the SDK v0.6.0
+`rea_close_hook.dll`); the game from the owner's GOG installer, unpacked
+by the launcher in an earlier run (`.work/realgame/prefix-h1`, read only);
+gamescope 3.17 `--backend headless` 1920×1080, system Wine in the
+`gaming` box, a private PipeWire null sink, every run from `env -i`;
+**new prefixes booted inside gamescope with no key for the game in HKLM
+(both views), HKCU or the VirtualStore**. Registry read with `wine reg
+query` before and after each run; the game ended with SIGTERM after
+45 s.
+
+| Run | What | Result |
+|---|---|---|
+| a1 | fresh prefix, `--no-window`, defaults (Widescreen) | title screen with its text (fonts load: `INSTALL_PATH` read through the redirect); `rea_close_hook.dll` mapped. Afterwards **only the HKCU key exists**: the launcher's paths plus what the game wrote back itself (`LANGUAGE` E, `SELECTION`, `CD_KEY`, its first-start 640×480). HKLM (both views) and the VirtualStore: no key |
+| a2 | next start | the game kept 1920×1080 (`WIDTH`/`HEIGHT` 0x780/0x438 after the run): the launcher's resolution reaches the game |
+| a3 | HKCU `SELECTION` seeded with a changed option bit and another vendor id (as v2b) | the game reset to 640×480; the launcher wrote back the player's options with the card's ids into HKCU and 1920×1080; log: "The game found another graphics card than last time, … The launcher put your graphics options back." 0.4.0's restore works on the new key |
+| b1 | **control**: the same runtime `cmr5.exe` (hook imported, `REA_CLOSE_HOOK_ATTACH=1`) without `REA_REGISTRY`, only the HKCU key present | `Unhandled page fault on read access to 00000010 at address 0041DA27`: the old crash, the game finds no `INSTALL_PATH` |
+| c1 | carry-over: fresh prefix seeded with HKLM 32-bit `LANGUAGE` F, `INSTALL_PATH` `C:\old\cmr2005` and VirtualStore `LANGUAGE` G | log "the game's values carried over …", `LANGUAGE = string:"G", if missing`; HKCU got `LANGUAGE` G (the VirtualStore first, as the game read it) and the launcher's own `INSTALL_PATH`; the title says "Drücken Sie die Eingabetaste, um zu spielen". HKLM and the VirtualStore left as they were |
+| c2 | carry-over from HKLM alone (`LANGUAGE` F) | HKCU `LANGUAGE` F; the old keys untouched (no screenshot: gamescopectl failed that run) |
+| k1 | `--check` (prefix of a1) | exit 0: "Ready to play: …" and "The game's settings are in HKEY_CURRENT_USER\Software\Codemasters\Colin McRae Rally 2005 (no administrator rights needed)." |
+| k2 | `--check` with `components\rea_close_hook.dll` removed | exit 1: "Not ready: the game would not find its settings …" naming the missing DLL and what to do |
+
+Pending: **native Windows, unelevated** (the redirect with no VirtualStore
+involved; a player of 0.4.0 keeps language and Graphics options).
+
 ### Not verified yet
 
 - Sound on real speakers beyond what the owner heard while playing.
 - Sound output (it went to the null sink; no errors, nothing measured).
 - Driving a stage (car physics at different frame rates).
 - The settings window on a real desktop (only headless gamescope so far), and with a gamepad.
-- Windows: how the launcher provides the registry values without admin rights.
+- Windows, unelevated: the game reads its key from HKCU through the close
+  hook's redirect (verified under Wine only, 2026-11-10).
 - Windows: which of the game's resets a player hits (a refused size or
   another adapter, e.g. a hybrid iGPU + dGPU machine); the restore runs the
   same code there (registry read through the same key as the writes).
