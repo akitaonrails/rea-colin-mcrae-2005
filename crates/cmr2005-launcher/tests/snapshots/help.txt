@@ -10,6 +10,7 @@ Options (each is also a launcher.cfg key):
   --resolution <WxH>                     Resolution
   --fps-limit <0-1000>                   Frame-rate cap
   --vsync on|off                         VSync
+  --advanced-particles on|off            Advanced particles
   --runtime <folder>                     Private copy folder
 
 Launcher switches:

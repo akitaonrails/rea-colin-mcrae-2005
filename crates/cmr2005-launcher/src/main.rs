@@ -310,6 +310,7 @@ mod app {
         }
         let plan = plan::plan_on(
             &picture,
+            settings.advanced_particles(),
             &folders.runtime,
             &folders.saves,
             wine,

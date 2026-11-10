@@ -607,6 +607,7 @@ mod tests {
         let picture = settings.picture(ui.state().screen);
         crate::plan::plan(
             &picture,
+            settings.advanced_particles(),
             std::path::Path::new(r"C:\r"),
             std::path::Path::new(r"C:\s"),
             true,
@@ -635,7 +636,10 @@ mod tests {
         let plan = game_gets(&ui);
         assert!(registry(&plan).contains(&"WIDTH = dword:2560".to_owned()));
         assert!(registry(&plan).contains(&"HEIGHT = dword:1440".to_owned()));
-        assert_eq!(plan.args, [crate::plan::WIDESCREEN_ARG]);
+        assert_eq!(
+            plan.args,
+            [crate::plan::WIDESCREEN_ARG, crate::plan::FORCE_HT_ARG]
+        );
     }
 
     #[test]
@@ -682,8 +686,33 @@ mod tests {
                 Some(width) => assert!(registry(&plan).contains(&width.to_owned()), "{label}"),
                 None => assert_eq!(registry(&plan).len(), 2, "{label}: only the paths"),
             }
-            assert_eq!(!plan.args.is_empty(), arg, "{label}");
+            assert_eq!(
+                plan.args.contains(&crate::plan::WIDESCREEN_ARG),
+                arg,
+                "{label}"
+            );
         }
+    }
+
+    #[test]
+    fn the_advanced_particles_switch_reaches_the_game() {
+        let mut ui = open("");
+        assert!(
+            game_gets(&ui).args.contains(&crate::plan::FORCE_HT_ARG),
+            "on by default"
+        );
+        ui.get_by_role_and_label(Role::Tab, "Picture").click();
+        ui.run();
+        ui.get_by_role_and_label(Role::Switch, "Advanced particles")
+            .click();
+        ui.run();
+        let saved = ui.state().form.settings();
+        assert_eq!(saved.advanced_particles, Some(false));
+        assert_eq!(
+            saved.advanced_particles,
+            flags(&["--advanced-particles", "off"]).advanced_particles
+        );
+        assert!(!game_gets(&ui).args.contains(&crate::plan::FORCE_HT_ARG));
     }
 
     #[test]

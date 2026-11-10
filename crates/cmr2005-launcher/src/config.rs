@@ -97,6 +97,15 @@ pub const OPTIONS: &[OptionSpec] = &[
          delay. Under Wine and Proton only.",
     ),
     OptionSpec::new(
+        "advanced_particles",
+        Kind::Toggle,
+        "Advanced particles",
+        "Lets the game offer its Advanced particles (dust, gravel and snow spray), which it \
+         otherwise allows only on 2004 Intel Hyper-Threading processors. On by default; turn \
+         them off here or in the game's Options, Graphics. Heavy snow on the Swedish stages \
+         can hide the road with them on.",
+    ),
+    OptionSpec::new(
         "runtime",
         Kind::Path,
         "Private copy folder",
@@ -263,6 +272,8 @@ pub struct Settings {
     pub resolution: Option<Resolution>,
     pub fps_limit: Option<u32>,
     pub vsync: Option<bool>,
+    /// `None`: on (the game's `FORCEHT` switch, docs/RESEARCH.md).
+    pub advanced_particles: Option<bool>,
     pub runtime: Option<PathBuf>,
 }
 
@@ -284,6 +295,7 @@ impl Settings {
             ("resolution", Value::Size(resolution)) => self.resolution = Some(resolution),
             ("fps_limit", Value::Number(fps)) => self.fps_limit = Some(fps),
             ("vsync", Value::Toggle(on)) => self.vsync = Some(on),
+            ("advanced_particles", Value::Toggle(on)) => self.advanced_particles = Some(on),
             _ => return Err(Rejected::Unknown),
         }
         Ok(())
@@ -303,7 +315,14 @@ impl Settings {
         self.resolution = flags.resolution.or(self.resolution);
         self.fps_limit = flags.fps_limit.or(self.fps_limit);
         self.vsync = flags.vsync.or(self.vsync);
+        self.advanced_particles = flags.advanced_particles.or(self.advanced_particles);
         self
+    }
+
+    /// Whether the game gets `FORCEHT`, which unlocks its Advanced
+    /// particles on any processor: on unless turned off.
+    pub fn advanced_particles(&self) -> bool {
+        self.advanced_particles.unwrap_or(true)
     }
 
     /// The picture for this run: the look's values, then the options set
@@ -500,6 +519,18 @@ mod tests {
         assert_eq!(merged.fps_limit, Some(30));
         assert_eq!(merged.vsync, Some(true));
         assert_eq!(merged.resolution, Some(Resolution::Size(800, 600)));
+    }
+
+    #[test]
+    fn advanced_particles_are_on_unless_turned_off() {
+        assert!(Settings::default().advanced_particles());
+        let (off, warnings) = parse_file("advanced_particles = off\n");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(!off.advanced_particles());
+        let (flags, _) = parse_args(["--advanced-particles".into(), "on".into()]).unwrap();
+        assert!(off.merged(flags).advanced_particles(), "a flag wins");
+        let (look, _) = parse_file("advanced_particles = off\nlook = widescreen\n");
+        assert!(!look.advanced_particles(), "a look leaves it alone");
     }
 
     #[test]

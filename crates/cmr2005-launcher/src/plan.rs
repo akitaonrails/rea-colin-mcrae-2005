@@ -15,6 +15,11 @@ use crate::runtime::DXVK_CONF;
 /// The command-line switch for the game's widescreen view.
 pub const WIDESCREEN_ARG: &str = "WIDESCREENDISPLAY";
 
+/// The switch that makes the game take the Hyper-Threading path it was
+/// built for, the only one where its Advanced particles option is offered
+/// (`0x5880b0`/`0x5880c0` test mode 2, which `FORCEHT` sets; docs/RESEARCH.md).
+pub const FORCE_HT_ARG: &str = "FORCEHT";
+
 /// Everything one launch changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
@@ -81,16 +86,24 @@ pub fn desktop_args(size: (u32, u32), exe: &str, args: &[&str]) -> Vec<String> {
     out
 }
 
-/// The plan for `picture` with the game running from `runtime` and saving
-/// to `saves`, under Wine or not.
-pub fn plan(picture: &Picture, runtime: &Path, saves: &Path, wine: bool) -> Plan {
-    plan_on(picture, runtime, saves, wine, None)
+/// The plan for `picture` (and the game's Advanced particles unlocked or
+/// not) with the game running from `runtime` and saving to `saves`, under
+/// Wine or not.
+pub fn plan(
+    picture: &Picture,
+    advanced_particles: bool,
+    runtime: &Path,
+    saves: &Path,
+    wine: bool,
+) -> Plan {
+    plan_on(picture, advanced_particles, runtime, saves, wine, None)
 }
 
 /// [`plan`] with the virtual desktop's screen size when one is needed
 /// (`desktop`: the landscape monitor's size).
 pub fn plan_on(
     picture: &Picture,
+    advanced_particles: bool,
     runtime: &Path,
     saves: &Path,
     wine: bool,
@@ -99,6 +112,9 @@ pub fn plan_on(
     let mut args = Vec::new();
     if picture.widescreen() {
         args.push(WIDESCREEN_ARG);
+    }
+    if advanced_particles {
+        args.push(FORCE_HT_ARG);
     }
     // The close hook always: the runtime's cmr5.exe imports it, so it
     // must sit next to it.
@@ -205,6 +221,7 @@ mod tests {
     fn a_16_by_9_size_gets_the_widescreen_view_and_its_mode() {
         let plan = plan(
             &picture(Resolution::Size(1920, 1080)),
+            false,
             Path::new("/r"),
             Path::new("/s"),
             true,
@@ -220,6 +237,7 @@ mod tests {
     fn original_keeps_the_games_mode_and_view() {
         let plan = plan(
             &picture(Resolution::Original),
+            false,
             Path::new("/r"),
             Path::new("/s"),
             false,
@@ -285,6 +303,7 @@ mod tests {
 
         let plan = plan_on(
             &picture(Resolution::Size(2560, 1440)),
+            true,
             Path::new("/r"),
             Path::new("/s"),
             true,
@@ -293,6 +312,7 @@ mod tests {
         assert_eq!(plan.virtual_desktop, Some((2560, 1440)), "the game's mode");
         let original = plan_on(
             &picture(Resolution::Original),
+            true,
             Path::new("/r"),
             Path::new("/s"),
             true,
@@ -322,6 +342,7 @@ mod tests {
         for wine in [true, false] {
             let plan = plan(
                 &picture(Resolution::Original),
+                true,
                 Path::new("/r"),
                 Path::new("/s"),
                 wine,
@@ -334,11 +355,35 @@ mod tests {
         assert_eq!(CLOSE_HOOK_DLL, rea_close_hook::DLL);
     }
 
+    /// `FORCEHT` unlocks the game's Advanced particles, which it otherwise
+    /// offers only on a 2004 Intel Hyper-Threading CPU (docs/RESEARCH.md).
+    #[test]
+    fn advanced_particles_pass_the_hyper_threading_switch() {
+        let run = |resolution, particles| {
+            plan(
+                &picture(resolution),
+                particles,
+                Path::new("/r"),
+                Path::new("/s"),
+                false,
+            )
+            .args
+        };
+        assert_eq!(run(Resolution::Original, true), [FORCE_HT_ARG]);
+        assert!(run(Resolution::Original, false).is_empty());
+        assert_eq!(
+            run(Resolution::Size(1920, 1080), true),
+            [WIDESCREEN_ARG, FORCE_HT_ARG]
+        );
+        assert_eq!(FORCE_HT_ARG, "FORCEHT");
+    }
+
     #[test]
     fn other_shapes_keep_the_4_by_3_view() {
         for size in [(1280, 800), (2560, 1080), (1024, 768)] {
             let plan = plan(
                 &picture(Resolution::Size(size.0, size.1)),
+                false,
                 Path::new("/r"),
                 Path::new("/s"),
                 true,

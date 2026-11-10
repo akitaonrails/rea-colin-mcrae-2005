@@ -26,7 +26,13 @@ fn launch(name: &str, flags: &[&str], screen: (u32, u32), wine: bool) {
     let (settings, _) = config::parse_args(args).unwrap();
     let settings = Settings::default().merged(settings);
     let picture = settings.picture(Some(screen));
-    let plan = plan::plan(&picture, Path::new(RUNTIME), Path::new(SAVES), wine);
+    let plan = plan::plan(
+        &picture,
+        settings.advanced_particles(),
+        Path::new(RUNTIME),
+        Path::new(SAVES),
+        wine,
+    );
     let text = format!(
         "flags: {}\nscreen: {}x{}, Wine: {wine}\npicture: {}\n\n{}",
         flags.join(" "),
@@ -84,4 +90,10 @@ fn option_mixes() {
         true,
     );
     launch("unset-everything.txt", &[], (1920, 1080), true);
+    launch(
+        "no-advanced-particles.txt",
+        &["--advanced-particles", "off"],
+        (1920, 1080),
+        false,
+    );
 }

@@ -24,7 +24,13 @@ impl Form {
                 values[i] = entry.value.trim().to_owned();
             }
         }
-        Form { values }
+        let mut form = Form { values };
+        // Unset means on: the switch shows what the game gets.
+        let particles = form.value_mut("advanced_particles");
+        if particles.is_empty() {
+            *particles = cfg::on_off(true).to_owned();
+        }
+        form
     }
 
     fn index(key: &str) -> usize {
@@ -153,6 +159,15 @@ mod tests {
         form.picture_edited(None);
         assert_eq!(form.look(), None);
         assert_eq!(form.settings().vsync, Some(false));
+    }
+
+    #[test]
+    fn the_advanced_particles_switch_shows_what_the_game_gets() {
+        assert_eq!(Form::from_text("").get("advanced_particles"), "on");
+        assert!(Form::from_text("").settings().advanced_particles());
+        let off = Form::from_text("advanced_particles = off\n");
+        assert_eq!(off.get("advanced_particles"), "off");
+        assert!(!off.settings().advanced_particles());
     }
 
     #[test]

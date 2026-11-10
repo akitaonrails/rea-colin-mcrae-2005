@@ -2,7 +2,7 @@ flags: --look widescreen
 screen: 2560x1440, Wine: false
 picture: resolution 2560x1440, fps_limit 60, vsync on
 
-arguments: WIDESCREENDISPLAY
+arguments: WIDESCREENDISPLAY, FORCEHT
 components installed: rea_close_hook.dll
 components taken out: d3d9.dll
 cmr5.exe imports: rea_close_hook.dll
