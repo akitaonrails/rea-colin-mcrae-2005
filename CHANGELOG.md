@@ -5,6 +5,8 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-10
+
 ### Fixed
 
 - The unpack window (the first start from GOG's installer) credits the
