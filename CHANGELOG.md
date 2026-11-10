@@ -5,6 +5,17 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Fixed
+
+- The unpack window (the first start from GOG's installer) credits the
+  photo again, as the settings window does ("Photo: KevBow, CC BY 2.0
+  (Wikimedia Commons)", small in the photo's lower left; screen readers
+  read it too). The window lost it when it moved to the SDK's in 0.3.0.
+
+### Changed
+
+- Built on rea-launcher-sdk v0.7.0.
+
 ## [0.4.1] - 2026-11-10
 
 ### Fixed

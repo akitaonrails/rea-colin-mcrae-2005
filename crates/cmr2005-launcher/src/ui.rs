@@ -317,6 +317,15 @@ fn picture_tab(ui: &mut egui::Ui, w: &mut Window) {
     }
 }
 
+/// What the unpack window shows for `build`: the game, the installer and
+/// the photo's credit, which its licence asks for wherever it is shown.
+pub fn unpacking(
+    build: &rea_launcher::installer::InstallerBuild,
+) -> rea_launcher_ui::unpack::Unpacking {
+    rea_launcher_ui::unpack::Unpacking::new(crate::GAME_TITLE, build.name, build.unpacked)
+        .with_credit(HERO_CREDIT)
+}
+
 #[cfg(windows)]
 pub use app::{Outcome, show, show_unpack};
 
@@ -335,7 +344,7 @@ mod app {
     use rea_launcher_win32::{dialog, display, wine, xinput};
 
     use rea_launcher::installer::{Installer, UnpackJob, UnpackOutcome};
-    use rea_launcher_ui::unpack::{self, Unpacking};
+    use rea_launcher_ui::unpack;
 
     use super::{HERO_JPEG, PHOTO_W, Window, draw};
     use crate::config;
@@ -350,7 +359,6 @@ mod app {
         let scale = display::wine_dpi_scale();
         let screen = display::screen_size();
         let fit = WindowFit::new(SIZE, wine::is_wine(), screen, scale).with_native_fit(true);
-        let state = Unpacking::new(crate::GAME_TITLE, found.build.name, found.build.unpacked);
         unpack::show(
             &PALETTE,
             &METRICS,
@@ -360,7 +368,7 @@ mod app {
                 hero_jpeg: HERO_JPEG,
                 photo_width: PHOTO_W,
             },
-            state,
+            super::unpacking(found.build),
             job,
             xinput::buttons,
         )
@@ -553,15 +561,16 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// The SDK's unpack window with this launcher's palette, title and
-    /// installer name; "Stop unpacking" stops it.
+    /// The SDK's unpack window with this launcher's palette, title,
+    /// installer name and the photo's credit (as in the settings window);
+    /// "Stop unpacking" stops it.
     #[test]
     fn the_unpack_window_names_the_game_and_the_installer_and_can_be_stopped() {
-        use rea_launcher_ui::unpack::{self, Unpacking};
+        use rea_launcher_ui::unpack;
         let gog = &source::INSTALLERS[0].value;
-        let state = Unpacking::new(crate::GAME_TITLE, gog.name, gog.unpacked);
-        let mut ui = testing::harness(&PALETTE, &METRICS, state, unpack::draw_unpack);
+        let mut ui = testing::harness(&PALETTE, &METRICS, unpacking(gog), unpack::draw_unpack);
         ui.run();
+        ui.get_by_role_and_label(Role::Label, HERO_CREDIT);
         assert!(
             ui.query_by_label_contains("Colin McRae Rally 2005")
                 .is_some()
