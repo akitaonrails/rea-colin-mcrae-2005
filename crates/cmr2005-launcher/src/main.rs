@@ -328,7 +328,7 @@ mod app {
             )),
             Some(warning) => out.warn(&warning),
         }
-        write_registry(out, &plan)?;
+        let before = write_registry(out, &plan)?;
         if !plan.app_dll_overrides.is_empty() {
             let applied = wine::app_dll_overrides(edition::GAME_EXE, &APP_OVERRIDES)
                 .map_err(|error| error.to_string())?;
@@ -369,6 +369,7 @@ mod app {
         let game_process = launch.spawn()?;
         let code = game_process.wait()?;
         out.log.line(&format!("game exited with {code}"));
+        check_after_run(out, picture.size(), &before);
         Ok(code as i32)
     }
 
@@ -437,27 +438,82 @@ mod app {
         Ok(())
     }
 
-    /// The game's registry values: HKLM (32-bit view), or the per-user
-    /// VirtualStore when HKLM can't be written.
-    fn write_registry(out: &Out, plan: &plan::Plan) -> Result<(), String> {
-        let (key, place) = Key::machine_or_virtual_store(registry::KEY)
-            .map_err(|error| format!("Cannot open the game's registry key: {error}"))?;
-        for write in &plan.registry {
+    /// The game's registry key: HKLM (32-bit view), or the per-user
+    /// VirtualStore when HKLM can't be written (the game reads and writes
+    /// that one too).
+    fn game_key() -> Result<(Key, rea_launcher_win32::reg::Place), String> {
+        Key::machine_or_virtual_store(registry::KEY)
+            .map_err(|error| format!("Cannot open the game's registry key: {error}"))
+    }
+
+    fn write_values(key: &Key, writes: &[registry::RegWrite]) -> Result<(), String> {
+        for write in writes {
             match &write.value {
                 RegValue::String(text) => key.set_string(write.name, text),
                 RegValue::Dword(n) => key.set_dword(write.name, *n),
             }
             .map_err(|error| format!("Cannot write the game's registry: {error}"))?;
         }
+        Ok(())
+    }
+
+    /// Registry writes as one log line.
+    fn described(writes: &[registry::RegWrite]) -> String {
+        writes
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+
+    /// The game's screen values and Graphics options as they are now.
+    fn snapshot(key: &Key) -> registry::Snapshot {
+        registry::Snapshot {
+            selection: key.string(registry::SELECTION).ok().flatten(),
+            width: key.dword(registry::WIDTH).ok().flatten(),
+            height: key.dword(registry::HEIGHT).ok().flatten(),
+        }
+    }
+
+    /// Writes the plan's registry values; returns the game's values from
+    /// before, for [`check_after_run`].
+    fn write_registry(out: &Out, plan: &plan::Plan) -> Result<registry::Snapshot, String> {
+        let (key, place) = game_key()?;
+        let before = snapshot(&key);
+        write_values(&key, &plan.registry)?;
         out.log.line(&format!(
             "registry ({}): {}",
             place.describe(),
-            plan.registry
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join("; ")
+            described(&plan.registry)
         ));
-        Ok(())
+        Ok(before)
+    }
+
+    /// After the game exits: when it could not use the size the launcher
+    /// set, it ran at 640x480 and reset its Graphics options; put them and
+    /// its last size back, and say so (`registry::after_run`).
+    fn check_after_run(out: &Out, wanted: Option<(u32, u32)>, before: &registry::Snapshot) {
+        let key = match game_key() {
+            Ok((key, _)) => key,
+            Err(error) => return out.warn(&error),
+        };
+        let outcome = registry::after_run(wanted, before, &snapshot(&key));
+        let registry::AfterRun::Fallback { restore, .. } = &outcome else {
+            return;
+        };
+        if let Err(error) = write_values(&key, restore) {
+            return out.warn(&error);
+        }
+        if !restore.is_empty() {
+            out.log
+                .line(&format!("registry restored: {}", described(restore)));
+        }
+        let message = outcome.message().unwrap_or_default();
+        if outcome.needs_the_player() {
+            out.log.line(&format!("warning: {message}"));
+            out.say(&message);
+        } else {
+            out.tell(&message);
+        }
     }
 }
