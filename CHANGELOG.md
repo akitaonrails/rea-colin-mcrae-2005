@@ -5,6 +5,8 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-10
+
 ### Fixed
 
 - **No administrator rights needed for the game's settings, on any
