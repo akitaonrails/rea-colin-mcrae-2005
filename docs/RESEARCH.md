@@ -80,7 +80,7 @@ needed for this crash. Verified in runs r04–r06.
 | `SAVEGAME_PATH` | REG_SZ | save folder (`SG`) |
 | `LANGUAGE` | REG_SZ | `E` written by the game on first run; strings are `data\Strings\Whole_{E,F,G,I,S}.Lng` |
 | `WIDTH`, `HEIGHT` | REG_DWORD | screen mode; the game writes 640×480 on first run; 1920×1080 set here renders at 1920×1080 (run r05) |
-| `SELECTION` | REG_SZ | 40-letter string the game writes (options packed as text; not decoded yet) |
+| `SELECTION` | REG_SZ | the Graphics options and the adapter's ids, 40 letters (decoded below, "The Graphics options reset") |
 | `CD_KEY` | REG_SZ | online only (GameSpy, dead); openspy-client injects a fake one |
 
 Other key read: `Software\Microsoft\Direct3D` (D3D debug settings).
@@ -105,6 +105,81 @@ Command-line switches (readme plus strings): `NOSOUND`, `NOHARDWARESOUND`,
 `FORCEHT`, `DISABLEHT`, `LONGPAUSE`, `SAFEMODE`, network `-HOST`/`-JOIN`/
 `-PORT`/`-NAME`/`-PASSWORD`/`-PLAYERS`/`-HOSTNAME`.
 
+## Advanced particles and `FORCEHT` (2026-11-09)
+
+**Observed (REA, `cmr5.exe` above):** `FORCEHT` (string `0x5e9e1c`) sets
+the switch byte `0xb6412b`; `0x588220` turns the switches into the
+Hyper-Threading mode `0xb674c4`: `DISABLEHT` → 0, `FORCEHT` → 2, otherwise
+the CPU detection at `0x599eb0` decides (only its "HT present" answer gives
+2). Only two functions read the mode: `0x5880b0` (mode == 2), which the
+Graphics menu (`0x42d980`) uses to enable or grey out the Advanced
+particles row, and `0x5880c0` (mode == 2 *and* bit 31 of the option word
+`0xb114b0`), which the particle code (`0x5ad2d3`, `0x5af31e`) asks. The
+default option word `0xda082017` has bit 31 set.
+
+**Community:** the GOG forum thread "advanced particles" (2009–2022)
+quotes Codemasters' FAQ ("requires an Intel Pentium Processor with
+Hyper-Threading enabled"), and players on Athlon 64 X2 and Core 2 Duo
+found it greyed out; `FORCEHT` on the shortcut is the known fix (posts
+from 2012, 2019, 2022). One poster reports that with Advanced particles on,
+snow on the Swedish stages hides the road. The issue #1 reporter says the
+same about AMD CPUs.
+
+**Runtime (RUNTIME_NOTES.md, 2026-11-09):** on an AMD Ryzen the row is
+greyed without the switch and selectable (On) with it; a stage runs.
+
+**Decision:** the launcher passes `FORCEHT` unless `advanced_particles =
+off`. It only makes the game's own option available; the in-game toggle
+stays the player's.
+
+## The Graphics options reset (`SELECTION`) (2026-11-09)
+
+**Observed (REA):** `0x569fd0` reads `WIDTH`, `HEIGHT`, `LANGUAGE`,
+`INSTALL_PATH`, `SAVEGAME_PATH`, `CD_KEY` and `SELECTION`; `0x569e10`
+writes them back. `SELECTION` is 40 letters: the 20 bytes at
+`0xb114b0`–`0xb114c3`, each byte as `'B' + low nibble`, `'X' - high
+nibble`. The five words are the Graphics option bits (`0xb114b0`; bit 31
+Advanced particles, bit 27 32-bit colour), more option bits (`0xb114b4`;
+bit 26 the in-game widescreen, top nibble the adapter index), the refresh
+choice (`0xb114b8`), and the adapter's D3D9 device and vendor id
+(`0xb114bc` = identifier `+0x430`, `0xb114c0` = `+0x42c`).
+`0x569d30` is the reset: defaults `0xda082017`, `0x0100026b`, `0x73c`,
+the current adapter's ids, and (on the very first read) 640×480.
+
+The display setup `0x58d1b0` calls the reset, then forces 640×480, when:
+
+1. the saved vendor/device ids match no adapter (unless `RESETDISPLAY`),
+2. or the mode list (`0x588850`: the adapter's 32-bit and 16-bit landscape
+   modes, at most 128 entries and 32 refresh rates) has no
+   `WIDTH`×`HEIGHT` in the saved colour depth (`0x588550` returns -1);
+
+`0x478030` does the same when creating the device fails. Then it writes
+the registry at once (`0x569e10`), so the player's options are gone for
+good.
+
+**Runtime:** the first start (no `SELECTION`: the ids read as unknown)
+always falls back; a size the screen lacks resets everything; another
+vendor id does too; DXVK and WineD3D report different device ids for the
+same GPU (RUNTIME_NOTES.md, 2026-11-09).
+
+**Inference:** this is the reporter's "savedata of all settings lost after
+resolution change in the launcher": a size the game refused, or another
+adapter (a hybrid iGPU/dGPU PC, a driver update, DXVK in or out), and the
+game wipes its Graphics options itself. The first-start fallback with
+`WIDESCREENDISPLAY` also explains the reported wrong menu aspect at 4K. On
+Windows the launcher checks a size with `EnumDisplaySettings` (any depth
+and refresh); the game's own list is D3D9's, capped at 128 entries, so a
+4K monitor with many modes can list a size the game drops.
+
+**Decision:** the launcher reads `SELECTION`, `WIDTH` and `HEIGHT` before
+writing its values and again after the game exits. When the game ran at
+640×480 with its default options instead of the size the launcher set, it
+writes back the player's option words (with the card ids the game found)
+and the previous size, and says why (a dialog only when the size was the
+cause, the one the player must change). Seeding `SELECTION` before the
+first start would need the adapter's D3D9 ids, which the SDK does not
+expose (proposal in the 2026-11-09 report).
+
 ## Community work
 
 | Project | What it does | Licence | Maintained | Needs | Decision |
@@ -114,6 +189,7 @@ Command-line switches (readme plus strings): `NOSOUND`, `NOHARDWARESOUND`,
 | `WIDESCREENDISPLAY` switch (built in) | Hor+ widescreen, HUD stretched (WSGF grade B) | n/a | n/a | any | **Configure**: candidate for the widescreen look, to be verified in-game |
 | CMR3/04/2005 Force Feedback Restore Module (PCGW file 2873, v4.3.1, 2024-12) | a configured Xidi build: XInput rumble, Start/Back → Enter/Esc | Xidi is BSD-3; the package's own licence is not stated | yes (2024) | Win10/11 | **Build on Xidi directly** (as the family already does), with our own config; don't redistribute the PCGW zip |
 | Xidi (samuelgr) | XInput controllers as DirectInput, force feedback | BSD-3 | yes | any | **Bundle** (family standard), mapping to be verified |
+| `FORCEHT` switch (GOG forum, 2012–2022) | Advanced particles on non-HT CPUs | n/a | n/a | any | **Configure** (0.4.0): passed unless `advanced_particles = off` |
 | DSOAL | EAX 4 over OpenAL Soft | LGPL | yes | any | **Later / optional**: keep a player's own `dsound.dll` (CMR4 rule); decide after audio is verified |
 | DXVK | D3D9 → Vulkan | zlib | yes | any | **To test**: WineD3D already runs at ~150 fps headless; earlier DXVK failure was a Vulkan-instance error on an old setup |
 | dgVoodoo2 | D3D wrapper (Windows) | freeware, no licence | yes | any | **Not planned**: no need found so far |
@@ -152,7 +228,9 @@ cockpit and replay cameras.
 | Intro videos (WMV) | play under Wine 11.21 with GStreamer (run r07); music (WMA) not checked |
 | Renderer speed | WineD3D: about 20 fps in a stage; DXVK: over 1000 (runs r08–r10) |
 | Frame-rate independence | the stage timer keeps real time at 20–1450 fps |
-| DirectSound3D / EAX | to check (audio went to a null sink; no errors) |
+| DirectSound3D / EAX | to check (audio went to a null sink; no errors); EAX needs DSOAL (proposal) |
+| Graphics options reset to defaults | **Solved** (0.4.0): the launcher restores them after the game's own reset |
+| Advanced particles greyed out (non-HT CPUs) | **Solved** (0.4.0): `FORCEHT` |
 | Timers / frame pacing at 150+ fps | to check in a stage |
 | Multi-core affinity | the game imports affinity APIs; to check |
 | Alt+F4, window close | **ignored by the game** (runs r13–r14): the close hook is needed |
@@ -228,4 +306,5 @@ setting points at the unpacked folder (unless it came from `--game`).
 - WineHQ AppDB version 6421: https://appdb.winehq.org/objectManager.php?sClass=version&iId=6421
 - GOG build listing: https://www.gogdb.org/product/1207658663/build/311
 - distrobox-gaming issue #4: https://github.com/akitaonrails/distrobox-gaming/issues/4
+- GOG forum, "advanced particles": https://www.gog.com/forum/colin_mcrae_rally_2005/advanced_particles
 - https://github.com/anzz1/openspy-client, https://github.com/kurtis2221/cmr05_hook, https://github.com/appoloin/install-scripts

@@ -5,6 +5,32 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+From a player's report on Quiver and issue #1.
+
+### Added
+
+- **Advanced particles** (Picture tab, `advanced_particles`,
+  `--advanced-particles`), on by default: the launcher starts the game
+  with its `FORCEHT` switch, so the game's own Advanced particles option
+  (Options, Graphics) is available on AMD and on Intel processors newer
+  than 2004. Without it the game greys the option out. Turn it off here or
+  in the game; heavy snow on the Swedish stages can hide the road with it
+  on.
+
+### Fixed
+
+- Graphics options lost after changing the resolution: when the game
+  can't use the picture size it is given, or finds a graphics card other
+  than last time (another GPU, a driver update, DXVK in or out), it drops
+  to 640×480 and resets every Graphics option to its defaults. The
+  launcher now notices this after the game exits, puts your graphics
+  options and the last size back, and says which happened. When the size
+  was the cause, it also shows a message asking for another Resolution
+  or the Original look.
+- `launcher.log` explains the game's very first start, which always runs
+  at 640×480 (and the menus look squeezed in the Widescreen look); the
+  size you chose applies from the second start.
+
 ## [0.3.0] - 2026-11-09
 
 ### Added

@@ -29,6 +29,8 @@ This project contains no game files: you need your own copy of the game.
 | The game starts at 640×480 in the corner of the screen. | The picture follows your screen: the **Widescreen** look uses the largest 16:9 size that fits, with the game's own widescreen view. |
 | Under Wine a stage runs at about 20 frames per second. | The launcher brings DXVK for Wine and Proton: the same stage runs at hundreds of frames per second, with a frame-rate cap and VSync you can set. |
 | Alt+F4 and the window's close button do nothing, so the game had to be killed. | Closing the window (or Super+W, or your desktop's close shortcut) ends the game and the launcher. |
+| The game's **Advanced particles** option is greyed out on AMD and on any Intel processor made after 2004: the game offers it only on a Pentium 4 with Hyper-Threading. | The launcher starts the game with its own `FORCEHT` switch, so the option is there on every processor (on by default). |
+| When the game can't use the picture size it was given, or finds another graphics card, it quietly drops to 640×480 and resets every Graphics option. | After the game exits the launcher notices, puts your graphics options back and says why. |
 | Saves sit inside the game folder, and copying or patching the game risked them. | Your saves get a folder of their own, outside the game and the launcher's copy. Saves already in your game folder are copied there once. |
 
 ## Screenshots
@@ -140,8 +142,9 @@ resolution you pick in the game, choose the **Original** look.
 ## The settings window
 
 **Play** holds the game folder and the looks. **Picture** holds the
-resolution, the frame-rate cap and VSync. Changing one of those by hand
-leaves the look cards unselected (your own mix).
+resolution, the frame-rate cap, VSync and Advanced particles. Changing one
+of the first three by hand leaves the look cards unselected (your own mix);
+Advanced particles is not part of a look.
 
 | Look | Resolution | Frame-rate cap | VSync | When to pick it |
 | --- | --- | --- | --- | --- |
@@ -173,11 +176,13 @@ calibrates the axes (**deadzone** and **saturation**) and holds the
 The launcher sets the picture size and, under Wine and Proton, the frame-rate
 cap and VSync. Everything else belongs to the game, in its own **Options**:
 
-- **Options → Graphics → Advanced Options** has **Advanced particles**
-  (on/off), **Post processing effects**, **Texture Quality**, **Environment
+- **Options → Graphics** has **Advanced particles** (on/off; the
+  launcher's **Advanced particles** switch makes the game offer it on any
+  processor). **Advanced Options** has **Post processing effects**, **Texture Quality**, **Environment
   Map**, **Shadows**, **Draw Distance**, **FSAA**, **Anisotropic filtering**
   and **Environmental Audio (EAX) 4.0**. If a detail or an effect is missing,
-  look there first; the launcher does not change those settings.
+  look there first; the launcher does not change those settings (it only
+  puts them back after the game reset them, see **Troubleshooting**).
 - **Vsync** and **Refresh Rate** are in the advanced display options. On
   Windows these are the settings to use: the launcher's frame-rate cap and
   VSync work under Wine and Proton only.
@@ -203,9 +208,10 @@ filled in.
 | `resolution` / `--resolution` | Picture: Resolution | `WIDTHxHEIGHT`, `original` | the game's own | The picture size. A 16:9 size gets the widescreen view. |
 | `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | `0`–`1000`, `off` | no cap | The most frames per second. 60 keeps the game's animations steady. Under Wine and Proton only. |
 | `vsync` / `--vsync` | Picture: VSync | `on`, `off` | the game's own | Waits for the screen: no tearing. Under Wine and Proton only. |
+| `advanced_particles` / `--advanced-particles` | Picture: Advanced particles | `on`, `off` | on | Starts the game with `FORCEHT`, which makes its Advanced particles option available on any processor (it starts on; turn it off here or in the game). Heavy snow on the Swedish stages can hide the road with them on. |
 | `runtime` / `--runtime` | — (file and flag only) | a folder | beside `launcher.log` | Where the launcher keeps its private copy. |
 
-Unset keeps the game's own value.
+Unset keeps the game's own value (Advanced particles: on).
 
 Any option on the command line skips the window and plays, overriding
 `launcher.cfg` for that run; only `--game` is remembered. The launcher's
@@ -280,6 +286,17 @@ Registry entries the launcher writes:
   tab; on Windows use the game's own **Vsync** and **Refresh Rate** options
   (Options → Graphics → Advanced Options) or your graphics driver's
   frame-rate limit for `cmr5.exe`.
+- **The game ran at 640×480 and my graphics options were reset:** the
+  game does this itself when it can't use the size it was given, when it
+  finds a graphics card other than last time (another GPU, a new driver, or
+  switching between DXVK and Wine's own Direct3D), and always on its very
+  first start. Since 0.4.0 the launcher notices after the game exits, puts
+  your graphics options and the last size back, and says which it was in
+  `launcher.log`. When the size was the cause it also shows a message:
+  choose another **Resolution** or the **Original** look.
+- **Advanced particles is greyed out in the game:** turn on **Advanced
+  particles** in the launcher's Picture tab (it is on unless you turned it
+  off).
 - **A sound or graphical detail is missing:** check the game's own
   **Options → Graphics → Advanced Options** first: advanced particles, post
   processing effects, shadows, draw distance, texture quality, anisotropic
@@ -303,6 +320,8 @@ Registry entries the launcher writes:
 - The intro videos and some front-end screens keep the game's original 4:3
   shape and look stretched in a widescreen picture; the game has no
   letterbox setting.
+- The game's very first start always runs at 640×480 (it has not seen your
+  graphics card yet); the size you chose applies from the second start.
 - Saves and `launcher.cfg` are per Windows user: another user profile starts
   with its own empty `saves` folder. Copy `%LOCALAPPDATA%\CMR2005Launcher\saves`
   to move saves to another profile.
@@ -374,8 +393,11 @@ sh <sdk>/scripts/sdk-sync --check .             # sdk/ matches the pinned SDK ta
    (frame-rate cap, VSync).
 4. Writes the game's registry values: where its files are, where to save,
    the screen mode.
-5. Starts the game, with `WIDESCREENDISPLAY` at 16:9 sizes, and a small
-   hook that turns a window close into quitting.
+5. Starts the game, with `WIDESCREENDISPLAY` at 16:9 sizes, `FORCEHT`
+   (Advanced particles on any processor), and a small hook that turns a
+   window close into quitting.
+6. After the game exits, puts the game's graphics options back if it
+   dropped to 640×480 and reset them.
 
 ## Built on rea-launcher-sdk
 

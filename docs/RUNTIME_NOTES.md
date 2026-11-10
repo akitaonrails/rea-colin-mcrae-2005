@@ -28,6 +28,7 @@ Status: ✅ verified · ⚠️ partly (see notes) · ❌ fails · — not yet ch
 | `resolution` | ✅ typed 1600x900 → `resolution = 1600x900` → `WIDTH`/`HEIGHT` 1600×900; back into the window (v10, v11) | ✅ r05, r08 | |
 | `fps_limit` | ✅ value box 75 → `fps_limit = 75` → `dxvk.conf` `d3d9.maxFrameRate = 75` (v10, v11) | ✅ r15 (45 fps cap) | |
 | `vsync` | ✅ switch off → `vsync = off` → `d3d9.presentInterval = 0` (v10, v11) | ✅ r16 (on: 59.9 fps) | |
+| `advanced_particles` | ✅ switch off → `advanced_particles = off` → no `FORCEHT` (ui e2e test); on → `FORCEHT` (v1–v3b) | ✅ m6/m7, v3b: without `FORCEHT` the game's Graphics menu shows "Advanced particles Off" greyed out on this AMD Ryzen; with it the row is selectable and On; a stage loads and runs (s1) | |
 | `game` | ✅ typed `Z:\…\extract\app` → `game = …`, "Found PC v1.1 (GOG)" (v12) | — | Browse… opens Wine's folder picker (v09) |
 
 ### Platforms
@@ -382,12 +383,21 @@ launcher code; no game run was needed.
   (`0xb6412b`, read at `0x588236`: 2 = forced HT, `DISABLEHT` = off), the
   `IntelHT` build's path; it is not a particle switch. The launcher does
   not pass it.
+  **Corrected 2026-11-09:** that mode is exactly what gates Advanced
+  particles (`0x5880b0`/`0x5880c0` test mode 2); without `FORCEHT` the
+  option is greyed out on any CPU the game's 2004 detection does not call
+  Hyper-Threading, AMD included (see the 2026-11-09 entry). The launcher
+  now passes it.
 - **Pads:** the game's Controllers menu calibrates deadzone and saturation
   and holds Vibration and Vibration Strength (same language file and
   `readme.txt` §IX). The launcher adds no mapping of its own yet.
 - **Saves:** the launcher has no profile switch and no code path that
   deletes a save; its `saves` folder is per Windows user. The reported loss
   after a "profile change" was not reproduced and needs the exact steps.
+  **Found 2026-11-09:** the "settings" are the game's Graphics options in
+  the registry (`SELECTION`), which the game itself resets when it can't
+  use the size it was given or finds another graphics card (see the
+  2026-11-09 entry).
 - **Widescreen cap:** the Widescreen look now sets `fps_limit = 60` (the
   value already seen in the game in w05); no new game behaviour.
 
@@ -418,6 +428,44 @@ Not checked here: the SDK unpack window on a real desktop (the launcher
 falls back to waiting when no window opens, as above), and the unpack on
 Windows and in the AppImage (unchanged innoextract; 0.2's runs above).
 
+### 2026-11-09: Quiver feedback and issue #1 (settings reset, advanced particles)
+
+The owner's GOG installer unpacked with innoextract into `.work/extract`
+(read only from the NAS); the game run headless (gamescope 3.17.0
+`--backend headless`, system Wine in the `gaming` box, a private
+PipeWire null sink, every run from `env -i`, prefixes `.work/q/prefix*`).
+Registry values read with `wine reg query` after each run. AMD Ryzen 9
+7950X3D, RTX 5090.
+
+**The game's own resets (plain `cmr5.exe`, no launcher, WineD3D):**
+
+| Run | Before | Result |
+|---|---|---|
+| r1 | no `SELECTION`, `WIDTH`/`HEIGHT` 1920×1080 | ran at 640×480 (screenshot: picture in the top-left quarter); wrote `WIDTH` 640, `HEIGHT` 480 and `SELECTION` with its default option words and this card's ids (vendor `0x10de`, device `0x6cd` as WineD3D reports it) |
+| r2 | r1's `SELECTION` with one option bit changed (bit 26 of the second word), 1920×1080 | kept: 1920×1080, the changed bit still there (only the refresh choice moved, `0x73b` → `0x73c`) |
+| r3 | r2's values, but 2560×1440 (not a mode of the 1920×1080 screen) | **reset**: 640×480, `SELECTION` back to the defaults, the changed bit gone |
+
+**The launcher (dev package, DXVK):**
+
+| Run | What | Result |
+|---|---|---|
+| v1 | fresh prefix, `--no-window --linux`, defaults (Widescreen look) | arguments `WIDESCREENDISPLAY, FORCEHT`; first start at 640×480 (intro video stretched to the screen); the log says "On its first start the game always uses 640x480; from the next start it uses 1920x1080." |
+| v2 | `SELECTION` with a changed option and another *device* id (`0x2b85`) | no reset: under DXVK the game sees the real device id `0x2b85` (WineD3D reported `0x6cd`) |
+| v2b, v3a | same, with another *vendor* id too | the game reset to 640×480 and its defaults; after it exited the launcher wrote back the player's options with the card's ids the game found, and 1920×1080; log: "The game found another graphics card than last time, so it ran at 640x480 and reset its Graphics options. The launcher put your graphics options back. From the next start it uses 1920x1080." |
+| v3b | next normal start | the game kept the restored options and 1920×1080 (registry unchanged after the run); its Graphics menu shows Advanced particles selectable and On |
+
+**Advanced particles:** m6 (no `FORCEHT`): the Graphics menu's
+"Advanced particles Off" is greyed and the cursor skips it. m7 (`FORCEHT`):
+"Advanced particles On - Off", selectable. s1 (`FORCEHT`): Time Trial,
+Spain stage 1, the stage started and ran (timer at 5.57 s); dust itself was
+not driven through.
+
+Not reproduced here: the reporter's exact trigger on Windows (the size
+the launcher set was refused, or the game saw another adapter). Under
+Wine the launcher only writes sizes the display lists (`fit_mode`), so the
+"size refused" message was checked with the game alone (r3) and unit
+tests.
+
 ### Not verified yet
 
 - Sound on real speakers beyond what the owner heard while playing.
@@ -425,3 +473,8 @@ Windows and in the AppImage (unchanged innoextract; 0.2's runs above).
 - Driving a stage (car physics at different frame rates).
 - The settings window on a real desktop (only headless gamescope so far), and with a gamepad.
 - Windows: how the launcher provides the registry values without admin rights.
+- Windows: which of the game's resets a player hits (a refused size or
+  another adapter, e.g. a hybrid iGPU + dGPU machine); the restore runs the
+  same code there (registry read through the same key as the writes).
+- Advanced particles while driving (dust, spray) and the snow visibility
+  reported on GOG's forum for the Swedish stages.

@@ -79,6 +79,13 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   This was the "Wine dead-end". The launcher always writes both values,
   pointing at its runtime copy and its saves folder. It also reads/writes
   `LANGUAGE`, `WIDTH`, `HEIGHT`, `SELECTION`, `CD_KEY` there.
+- **The game resets its own Graphics options** (`SELECTION`, the option
+  words and the adapter's D3D9 ids) and drops to 640×480 when it can't use
+  `WIDTH`×`HEIGHT`, finds another adapter, or starts for the first time.
+  The launcher snapshots `SELECTION`/`WIDTH`/`HEIGHT` before writing and
+  restores them after the game exits (`registry::after_run`).
+- **`FORCEHT`** unlocks the game's Advanced particles on non-HT CPUs (AMD,
+  modern Intel); passed unless `advanced_particles = off`.
 - **Files the game writes:** `SG\OPTIONS` and saves under `SAVEGAME_PATH`
   (`BESTTIMES_GHOSTS`, `CAREER_SLOT_*`, `CHAMPIONSHIP_SLOT_*`), plus the
   registry values above.

@@ -10,6 +10,7 @@ reviews and posts. Only fixes verified in the real game.
 |---|---|---|---|
 | PCGamingWiki, Colin McRae Rally 2005 (Issues fixed; Linux) | The startup crash: the install-path registry values | `RUNTIME_NOTES.md` r02–r06, e06 | draft |
 | WineHQ Bugzilla, bug 38198 (comment) | The cause of the `0x41DA27` crash | same | draft |
+| PCGamingWiki, Colin McRae Rally 2005 (Issues fixed) | Graphics options reset to defaults at 640×480: the game's own reset when the size or adapter changes; `SELECTION` decoded | `RUNTIME_NOTES.md` 2026-11-09 (r1–r3, v2b–v3b), `RESEARCH.md` | draft |
 | WineHQ AppDB, version 6421 (test report) | What works under Wine 11.21 | `RUNTIME_NOTES.md` | draft |
 | rea-launcher-sdk (issue) | Light palettes: the theme leaves egui's dark widget fills | `src/palette.rs::light_widgets` and its test | done in SDK v0.4.0 (adopted; local fix removed) |
 | rea-launcher-sdk (issue) | Close hook: Alt+F4 never reaches a game with an exclusive DirectInput keyboard | `RUNTIME_NOTES.md` e06, e09 | done in SDK v0.4.0/v0.4.1 (`close_on = alt_f4_state`, adopted); follow-up draft below: it only acts when a message arrives (w02) |
@@ -17,6 +18,25 @@ reviews and posts. Only fixes verified in the real game.
 | rea-launcher-sdk (issue) | `report::Audience`: `--help`/`--check` under Wine become a dialog, so a script waits on it | `src/cli.rs::commands_print_only` and its tests | draft |
 
 ## Drafts
+
+### PCGamingWiki: "Graphics settings reset to defaults / game starts at 640×480" (Issues fixed)
+
+Applies to: the GOG release (`cmr5.exe` 1.1, SHA-256 `a7ea2d33…13bc`);
+the code is the retail 1.1 one.
+
+> **Graphics settings reset and the game starts at 640×480**
+>
+> The game keeps its Graphics options in the registry value `SELECTION`
+> (`HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005`, 32-bit view),
+> together with the graphics card's vendor and device id. On start it
+> resets all of them to the defaults and uses 640×480 when the saved
+> `WIDTH`×`HEIGHT` is not in its own mode list, when the saved card is not
+> found (another GPU, a new driver, or switching between DXVK and Wine's
+> WineD3D, which report different device ids), and always on the very first
+> start. Fix: back up `SELECTION` (e.g. `reg export`) after setting the
+> options and restore it if it happens; pick a resolution from the game's
+> own Graphics menu. The rea launcher does this automatically.
+
 
 ### PCGamingWiki: "Game crashes on startup / after the logos" (Issues fixed)
 
