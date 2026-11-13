@@ -3,7 +3,7 @@
 This repository makes the player's own copy of **Colin McRae Rally 2005** run on modern
 Windows and Linux (Proton/Wine, AppImage) with a settings window, sensible
 defaults and no manual steps. It is built on
-[rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk) v0.7.0.
+[rea-launcher-sdk](https://github.com/akitaonrails/rea-launcher-sdk) v0.8.2.
 
 **Read `sdk/docs/STANDARDS.md` before any work; the playbooks are in
 `sdk/docs/playbooks/`** (vendored from the SDK at the tag in `sdk/VERSION`).
