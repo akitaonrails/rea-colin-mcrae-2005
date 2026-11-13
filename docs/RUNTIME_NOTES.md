@@ -532,15 +532,16 @@ game unpacked there from the owner's GOG installer). Harness
 `bin/fake.sh` (the runtime's `cmr5.exe` started directly); processes found
 by exact name and our own session only. `tools/opts.py` reads player 1's
 controller fields from `OPTIONS` or from the game's copy at `0x8f9030`.
-Evidence in `.work/realgame/logs/{a1-off,b1-on,c1-fake,d1-auto-altf4}`.
+Evidence in `.work/realgame/logs/{a1-off,b1-on,c1-fake,d1-auto-altf4,b2-on-f022}`.
 Every run: Return through the menus into a Time Trial stage, then a close.
 
 | Run | What | Result |
 |---|---|---|
 | a1 | `wheel = off`, no `OPTIONS` yet | `rea_close_hook.dll` and `rea_dinput.dll` both mapped into `cmr5.exe`; the launcher logged "no OPTIONS yet … controls not seeded"; the stage ran; the game wrote `OPTIONS` (slot 2 empty: no controller); `WM_DELETE_WINDOW` ended everything in 3.6 s |
 | b1 | `wheel = on`, `wheel_log = on` | launcher: "the virtual wheel seeded in slot 2 for player 1", `wheel-records` written. Layer log: mode on (`REA_WHEEL_MODE`), `CreateDevice` of the virtual wheel, `c_dfDIJoystick2`, `DIPROP_RANGE` on X, Y, Z, Rz by object ID, `DIPROP_AUTOCENTER`, then Spring, Damper, Sine and Constant effects. In the stage the game's own copy of `OPTIONS` still held the seed: ids 5245/1209, steering 34/34, accelerate 36, brake 37, calibration entries 7/9, autocentre off, player 1 on slot 2, byte 0 `0x13` (bit 0 set by the game at load); the re-saved file the same; the trailer unchanged. Closed in 3.6 s; "the virtual wheel's controls kept for the next start" |
-| c1 | the same runtime started directly, `fake = wheel` appended to its `rea_wheel.ini` by hand (the launcher's next start wrote the file again without it) | the layer found the fake CSL DD, hid it from the game, took it exclusive in the background, and made the game's four effects on it at the 50 % strength (saturation 10000 → 5000); the seeded record held in memory as in b1; closed in 1 s |
+| c1 | the same runtime started directly, `fake = wheel` appended to its `rea_wheel.ini` by hand (the launcher's next start wrote the file again without it) | the layer found the fake CSL DD, hid it from the game, took it exclusive in the background, and made the game's four effects on it at the 50 % strength (saturation 10000 → 5000; since SDK f022a0c the strength is the wheel's gain instead, and effects keep the game's values); the seeded record held in memory as in b1; closed in 1 s |
 | d1 | `wheel = auto`, no wheel attached, Alt+F4 held while the mouse moves | launcher: "the game doesn't see the virtual wheel", "no wheel this time; the controller record … back in slot 2"; layer: "off: the game gets its DirectInput untouched"; `OPTIONS` afterwards **byte for byte the file a1 left** (the seed fully undone); Alt+F4 ended everything in 3.95 s |
+| b2 | `wheel = on` again, on the SDK's review fixes (f022a0c: strength as gain, lower-case GUIDs, `rig::joystate2`) | launcher: "the virtual wheel's record (with your in-game changes) back in slot 2" (b1's, from `wheel-records`); layer log: "rea wheel" created, `DIPROP_RANGE` on its four axes, `DIPROP_AUTOCENTER`, Spring, Damper, Sine and Constant effects; the record held in the game's memory and in the re-saved file; closed in 3.5 s |
 
 gamescope 3.17.0 still segfaults on exit (the helper's exit 139), as
 before. Not seen: the slot-type word at `0xab848` the seed study expected
