@@ -13,6 +13,7 @@
 //! - [`saves`]: the launcher's folders and the saves folder.
 //! - [`registry`]: the game's registry key and what a launch writes.
 //! - [`components`]: DXVK, the close hook, innoextract, `dxvk.conf`.
+//! - [`controls`]: the virtual wheel's record in the game's `OPTIONS`.
 //! - [`plan`]: everything one launch changes, for `main` and the tests.
 //! - `palette`, `ui`: the settings window (Windows, and the host's tests).
 
@@ -31,6 +32,7 @@ pub const INSTANCE: &str = "cmr2005";
 pub mod cli;
 pub mod components;
 pub mod config;
+pub mod controls;
 pub mod edition;
 pub mod form;
 pub mod plan;
