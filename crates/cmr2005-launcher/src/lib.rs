@@ -14,6 +14,7 @@
 //! - [`registry`]: the game's registry key and what a launch writes.
 //! - [`components`]: DXVK, the close hook, innoextract, `dxvk.conf`.
 //! - [`controls`]: the virtual wheel's record in the game's `OPTIONS`.
+//! - [`wheel`]: the in-game wheel layer on a start: shown or not, its file.
 //! - [`plan`]: everything one launch changes, for `main` and the tests.
 //! - `palette`, `ui`: the settings window (Windows, and the host's tests).
 
@@ -40,6 +41,7 @@ pub mod registry;
 pub mod runtime;
 pub mod saves;
 pub mod source;
+pub mod wheel;
 
 #[cfg(any(windows, test))]
 pub mod palette;

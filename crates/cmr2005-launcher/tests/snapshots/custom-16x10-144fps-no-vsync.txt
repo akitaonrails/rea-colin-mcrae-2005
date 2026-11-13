@@ -21,8 +21,23 @@ d3d9 = native,builtin
 REA_CLOSE_HOOK=class=PC_CMR5;close_on=sc_close,alt_f4,alt_f4_state;strategy=terminate
 REA_CLOSE_HOOK_ATTACH=1
 REA_REGISTRY=HKLM\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005 -> HKCU\Software\Codemasters\Colin McRae Rally 2005
+REA_WHEEL_MODE=off
 
 [file dxvk.conf]
 # Written by CMR2005Launcher on every start; change the settings in the launcher.
 d3d9.maxFrameRate = 144
 d3d9.presentInterval = 0
+
+[file rea_wheel.ini]
+# rea_wheel.ini - the wheel settings, written by the launcher
+mode = auto
+lock = 270
+invert_accel = off
+invert_brake = off
+device = 
+pedals = 
+deadzone = 0
+linearity = 0
+ffb_strength = 50
+ffb_invert = off
+log = off

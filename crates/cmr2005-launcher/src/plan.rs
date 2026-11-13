@@ -9,10 +9,12 @@ use std::path::Path;
 
 use crate::components::{self, APP_OVERRIDES, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DXVK_DLL};
 use crate::config::Picture;
+use rea_launcher::wheel::dinput;
 use rea_launcher_win32::reg::Value;
 
 use crate::registry;
 use crate::runtime::DXVK_CONF;
+use crate::wheel;
 
 /// The command-line switch for the game's widescreen view.
 pub const WIDESCREEN_ARG: &str = "WIDESCREENDISPLAY";
@@ -160,6 +162,15 @@ pub fn plan_on(
 }
 
 impl Plan {
+    /// This plan with the in-game wheel layer's part (`crate::wheel`):
+    /// `rea_wheel.ini` (`ini`) in the runtime, and whether the game is
+    /// shown the virtual wheel in its environment.
+    pub fn with_wheel(mut self, shown: bool, ini: String) -> Plan {
+        self.files.push((dinput::FILE, Some(ini)));
+        self.env.push((wheel::MODE_ENV, wheel::mode_value(shown)));
+        self
+    }
+
     /// The plan as text, for the golden snapshots and the log.
     pub fn render(&self) -> String {
         let list = |items: &[&str]| {
@@ -386,6 +397,30 @@ mod tests {
             [WIDESCREEN_ARG, FORCE_HT_ARG]
         );
         assert_eq!(FORCE_HT_ARG, "FORCEHT");
+    }
+
+    /// The layer reads its file next to it and is told whether to show
+    /// the wheel, the launcher's decision.
+    #[test]
+    fn the_wheel_layer_gets_its_file_and_the_decision() {
+        for shown in [true, false] {
+            let plan = plan(
+                &picture(Resolution::Original),
+                true,
+                Path::new("/r"),
+                Path::new("/s"),
+                true,
+            )
+            .with_wheel(shown, "mode = auto\n".into());
+            assert!(
+                plan.files
+                    .contains(&(dinput::FILE, Some("mode = auto\n".into())))
+            );
+            assert!(
+                plan.env
+                    .contains(&(wheel::MODE_ENV, wheel::mode_value(shown)))
+            );
+        }
     }
 
     #[test]

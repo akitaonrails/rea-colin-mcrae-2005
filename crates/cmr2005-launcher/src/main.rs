@@ -22,17 +22,23 @@ fn main() {
 mod app {
 
     use std::path::{Path, PathBuf};
+    use std::time::{Duration, Instant};
 
     use cmr2005_launcher::cli::{self, Invocation, Mode};
     use cmr2005_launcher::components::{self, APP_OVERRIDES};
     use cmr2005_launcher::registry;
     use cmr2005_launcher::saves::{self, Folders};
     use cmr2005_launcher::source::{self, Source};
-    use cmr2005_launcher::{INSTANCE, WINDOW_TITLE, config, edition, plan, runtime, ui};
+    use cmr2005_launcher::{
+        INSTANCE, WINDOW_TITLE, config, controls, edition, plan, runtime, ui, wheel,
+    };
     use rea_launcher::ledger::{Ledger, Outcome};
     use rea_launcher::log::Log;
+    use rea_launcher::wheel::dinput;
+    use rea_launcher::wheel::rig::{Device, WheelDevices};
     use rea_launcher::{cfg, fsx, paths};
     use rea_launcher_win32::dialog::{self, Icon};
+    use rea_launcher_win32::dinput::DirectInput;
     use rea_launcher_win32::gpu::{self, Glx};
     use rea_launcher_win32::innoextract::Unpacked;
     use rea_launcher_win32::instance::{self, SecondStart, Window};
@@ -292,6 +298,23 @@ mod app {
             }
         }
 
+        // Right before the start: does the game see the virtual wheel?
+        // OPTIONS gets the wheel's controls only then (`controls`).
+        let wheel_path = path.with_file_name(dinput::FILE);
+        let wheel_ini = std::fs::read_to_string(&wheel_path).unwrap_or_default();
+        let wheel_setup = settings.wheel_setup(&wheel_ini);
+        let wheel_shown = wheel::shown(&wheel_setup, attached_controllers);
+        out.log.line(&format!(
+            "wheel support {}: the game {} the virtual wheel",
+            wheel_setup.mode.key(),
+            if wheel_shown { "sees" } else { "doesn't see" }
+        ));
+        let stash = home().join(controls::STASH);
+        match controls::prepare(&folders.saves, &stash, wheel_shown) {
+            Ok(change) => out.log.line(&change.describe()),
+            Err(error) => out.warn(&format!("the game's controls were not set up: {error}")),
+        }
+
         let mut picture = settings.picture(screen);
         out.log.line(&format!(
             "screen: {}; picture: {}",
@@ -317,7 +340,8 @@ mod app {
             &folders.saves,
             wine,
             placement.virtual_desktop.then_some(screen).flatten(),
-        );
+        )
+        .with_wheel(wheel_shown, wheel::runtime_ini(&wheel_ini, &wheel_setup));
         install_components(out, &plan, &game_dir, &folders.runtime, &components_dir)?;
         // From the player's bytes on every start, with the close hook in
         // its import table: Windows loads the hook with the game, which
@@ -372,7 +396,32 @@ mod app {
         let code = game_process.wait()?;
         out.log.line(&format!("game exited with {code}"));
         check_after_run(out, picture.size(), &before);
+        match controls::keep(&folders.saves, &stash) {
+            Ok(true) => out
+                .log
+                .line("the virtual wheel's controls kept for the next start"),
+            Ok(false) => {}
+            Err(error) => out.warn(&format!("the wheel's controls were not kept: {error}")),
+        }
         Ok(code as i32)
+    }
+
+    /// How long the first DirectInput list may take before "none".
+    const LIST_WAIT: Duration = Duration::from_secs(1);
+
+    /// The controllers DirectInput lists now, as the game will see them,
+    /// for `wheel::shown`. The SDK's worker lists them shortly after the
+    /// first ask; an empty list after [`LIST_WAIT`] means none.
+    fn attached_controllers() -> Vec<Device> {
+        let mut devices = DirectInput::start();
+        let asked = Instant::now();
+        loop {
+            let list = devices.devices();
+            if !list.is_empty() || asked.elapsed() >= LIST_WAIT {
+                return list;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     /// Unpacks GOG's installer into `dest` with the bundled innoextract,

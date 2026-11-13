@@ -727,11 +727,16 @@ mod tests {
             let ini = wheel_ini(&ui);
             assert!(ini.contains(line), "{label}: {line} in\n{ini}");
             assert_eq!(saved.wheel_setup(&ini), ui.state().wheel.setup);
+            let layer = layer_file(&game_gets(&ui));
+            assert!(layer.contains(line), "{label}: the game's {line}");
         }
+        let env = game_gets(&ui).env;
+        assert!(env.contains(&(crate::wheel::MODE_ENV, "on")), "{env:?}");
     }
 
-    /// The tab-only settings (no flag: STANDARDS allows a tab's one-off
-    /// tuning in its own file) reach `rea_wheel.ini`.
+    /// The settings with no option of their own (they live in
+    /// `rea_wheel.ini`, which the window and a text editor both edit) reach
+    /// the layer's file.
     #[test]
     fn every_other_wheel_control_saves_to_rea_wheel_ini() {
         let mut ui = wheel_window("", None);
@@ -750,6 +755,7 @@ mod tests {
             choose(&mut ui, role, label);
             let ini = wheel_ini(&ui);
             assert!(ini.contains(line), "{label}: {line} in\n{ini}");
+            assert!(layer_file(&game_gets(&ui)).contains(line), "{label}");
         }
     }
 
@@ -798,9 +804,13 @@ mod tests {
     }
 
     /// What the game gets from the window's saved settings (Wine).
+    /// What the game gets from the window's saved files (Wine, no
+    /// controller attached).
     fn game_gets(ui: &Harness<'static, Window>) -> crate::plan::Plan {
         let settings = ui.state().form.settings();
         let picture = settings.picture(ui.state().screen);
+        let ini = ui.state().wheel_ini("");
+        let setup = settings.wheel_setup(&ini);
         crate::plan::plan(
             &picture,
             settings.advanced_particles(),
@@ -808,6 +818,16 @@ mod tests {
             std::path::Path::new(r"C:\s"),
             true,
         )
+        .with_wheel(
+            crate::wheel::shown(&setup, Vec::new),
+            crate::wheel::runtime_ini(&ini, &setup),
+        )
+    }
+
+    /// The runtime's `rea_wheel.ini` in a plan.
+    fn layer_file(plan: &crate::plan::Plan) -> String {
+        let file = plan.files.iter().find(|(name, _)| *name == "rea_wheel.ini");
+        file.and_then(|(_, text)| text.clone()).unwrap_or_default()
     }
 
     fn registry(plan: &crate::plan::Plan) -> Vec<String> {

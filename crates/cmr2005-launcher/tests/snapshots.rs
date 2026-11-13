@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use cmr2005_launcher::config::{self, Look, Settings};
-use cmr2005_launcher::plan;
+use cmr2005_launcher::{plan, wheel};
 
 /// `rea_launcher::snapshot!` with this launcher's own update variable kept
 /// (`REA_UPDATE_SNAPSHOTS=1` works too). The crate's version is stored as
@@ -32,6 +32,12 @@ fn launch(name: &str, flags: &[&str], screen: (u32, u32), wine: bool) {
         Path::new(RUNTIME),
         Path::new(SAVES),
         wine,
+    );
+    // No controller is attached here: Auto shows no wheel.
+    let setup = settings.wheel_setup("");
+    let plan = plan.with_wheel(
+        wheel::shown(&setup, Vec::new),
+        wheel::runtime_ini("", &setup),
     );
     let text = format!(
         "flags: {}\nscreen: {}x{}, Wine: {wine}\npicture: {}\n\n{}",
@@ -90,6 +96,12 @@ fn option_mixes() {
         true,
     );
     launch("unset-everything.txt", &[], (1920, 1080), true);
+    launch(
+        "wheel-on-540-ffb-60.txt",
+        &["--wheel", "on", "--wheel-lock", "540", "--wheel-ffb", "60"],
+        (1920, 1080),
+        true,
+    );
     launch(
         "no-advanced-particles.txt",
         &["--advanced-particles", "off"],
