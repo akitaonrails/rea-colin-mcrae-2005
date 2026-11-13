@@ -34,10 +34,9 @@ fn launch(name: &str, flags: &[&str], screen: (u32, u32), wine: bool) {
         wine,
     );
     // No controller is attached here: Auto shows no wheel.
-    let setup = settings.wheel_setup("");
     let plan = plan.with_wheel(
-        wheel::shown(&setup, Vec::new),
-        wheel::runtime_ini("", &setup),
+        wheel::shown(&settings.wheel, Vec::new),
+        wheel::runtime_ini(&settings.wheel, ""),
     );
     let text = format!(
         "flags: {}\nscreen: {}x{}, Wine: {wine}\npicture: {}\n\n{}",
@@ -97,8 +96,8 @@ fn option_mixes() {
     );
     launch("unset-everything.txt", &[], (1920, 1080), true);
     launch(
-        "wheel-on-540-ffb-60.txt",
-        &["--wheel", "on", "--wheel-lock", "540", "--wheel-ffb", "60"],
+        "wheel-on-900-ffb-60.txt",
+        &["--wheel", "on", "--wheel-lock", "900", "--wheel-ffb", "60"],
         (1920, 1080),
         true,
     );

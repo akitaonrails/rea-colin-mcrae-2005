@@ -3,23 +3,19 @@
 //!
 //! The layer wraps the game's DirectInput and shows it one virtual wheel
 //! made from the player's wheel and pedals (`rea_launcher::wheel::dinput`).
-//! It reads `rea_wheel.ini` next to it in the runtime: the Wheel tab's
-//! file with the `wheel*` options of this start on top
-//! ([`runtime_ini`]). The launcher decides before the start whether the
+//! It reads `rea_wheel.ini` next to it in the runtime, made at each start
+//! from the `wheel*` options (`launcher.cfg` and the flags) and the pedal
+//! calibration the Wheel tab keeps in its own `rea_wheel.ini` beside
+//! `launcher.cfg` ([`runtime_ini`]). The launcher decides before the start whether the
 //! wheel will be shown ([`shown`], the rule the layer applies too) and
 //! tells the layer through [`MODE_ENV`], so the game's `OPTIONS` is seeded
 //! for the same devices the game will see (`crate::controls`).
 
-use rea_launcher::wheel::dinput::{Mode, Setup};
+use rea_launcher::wheel::dinput::{HEADER, Mode, Profile, Setup};
 use rea_launcher::wheel::rig::{self, Device};
 
 /// The layer's DLL, next to the runtime's `cmr5.exe`, which imports it.
 pub const DLL: &str = "rea_dinput.dll";
-
-/// The comment a new `rea_wheel.ini` starts with, as the window writes it
-/// (`rea_launcher_ui::wheel::HEADER`; that crate builds only for Windows
-/// and the tests here).
-pub const HEADER: &str = "rea_wheel.ini - the wheel settings, written by the launcher";
 
 /// The layer's on/off for this start, in the game's environment.
 pub const MODE_ENV: &str = "REA_WHEEL_MODE";
@@ -40,10 +36,10 @@ pub fn mode_value(shown: bool) -> &'static str {
     if shown { "on" } else { "off" }
 }
 
-/// The runtime's `rea_wheel.ini`: the Wheel tab's file (`ini`, its
-/// calibration and other keys kept) with this start's `setup`.
-pub fn runtime_ini(ini: &str, setup: &Setup) -> String {
-    setup.to_cfg(ini, HEADER)
+/// The runtime's `rea_wheel.ini`: this start's `setup` and the
+/// calibration file's text (`""`: none yet, the layer guesses one).
+pub fn runtime_ini(setup: &Setup, calibration: &str) -> String {
+    rig::save("", setup, Profile::from_cfg(calibration).as_ref(), HEADER)
 }
 
 #[cfg(test)]
@@ -95,19 +91,15 @@ mod tests {
     }
 
     #[test]
-    fn the_runtime_file_has_this_starts_settings_and_keeps_the_rest() {
-        let ini = "# mine\nmode = auto\nwheel_vid = 3767\nlock = 540\n";
-        let mut start = Setup::from_cfg(ini);
-        start.mode = Mode::Off;
-        let text = runtime_ini(ini, &start);
-        assert!(text.starts_with("# mine\n"), "{text}");
-        assert!(text.contains("wheel_vid = 3767"), "the calibration stays");
+    fn the_runtime_file_has_this_starts_setup_and_the_calibration() {
+        let csl = device(Kind::Wheel);
+        let profile = Profile::guess(csl.id, &csl.initial, None);
+        let calibration = profile.to_cfg("# mine\n", "");
+        let start = setup(Mode::Off);
+        let text = runtime_ini(&start, &calibration);
+        assert!(text.starts_with(&format!("# {HEADER}\n")), "{text}");
         assert_eq!(Setup::from_cfg(&text), start);
-        assert!(runtime_ini("", &start).starts_with(&format!("# {HEADER}\n")));
-    }
-
-    #[test]
-    fn the_header_is_the_windows() {
-        assert_eq!(HEADER, rea_launcher_ui::wheel::HEADER);
+        assert_eq!(Profile::from_cfg(&text), Some(profile), "{text}");
+        assert_eq!(Profile::from_cfg(&runtime_ini(&start, "")), None);
     }
 }

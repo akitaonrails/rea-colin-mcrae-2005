@@ -25,7 +25,7 @@ REA_WHEEL_MODE=off
 [file rea_wheel.ini]
 # rea_wheel.ini - the wheel settings, written by the launcher
 mode = auto
-lock = 270
+lock = 540
 invert_accel = off
 invert_brake = off
 device = 

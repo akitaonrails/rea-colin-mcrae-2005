@@ -6,16 +6,16 @@
 //!
 //! Layout: the hero image strip on the left, the title and status, the
 //! Play tab (game folder and look cards), the Picture tab (the picture
-//! rows of `config::OPTIONS`) and the Wheel tab (the SDK's `WheelTab`,
-//! which edits `rea_wheel.ini` and the `wheel*` options), the footer with
-//! the Play plate.
+//! rows of `config::OPTIONS`) and the Wheel tab (the SDK's `WheelTab`:
+//! the `wheel*` options, and the pedal calibration it keeps in
+//! `rea_wheel.ini` beside `launcher.cfg`), the footer with the Play plate.
 //! Any change to the window's look or layout goes through a design skill
 //! (docs/STANDARDS.md "Settings window and CLI").
 
 use std::path::PathBuf;
 
 use rea_launcher::cfg::{OptionSpec, spec};
-use rea_launcher::wheel::dinput::Mode;
+use rea_launcher::wheel::dinput::options as wheel_options;
 use rea_launcher::wheel::rig::{self, WheelDevices};
 use rea_launcher_ui::egui::{self, Align2, Rect, RichText, TextureHandle, pos2, vec2};
 use rea_launcher_ui::spec::{mark_rendered, spec_path_row, spec_row};
@@ -24,7 +24,7 @@ use rea_launcher_ui::wheel::WheelTab;
 use rea_launcher_ui::widgets::{self, Crop, LookCard};
 use rea_launcher_ui::window::Layout;
 
-use crate::config::{self, Look, OPTIONS, WHEEL_KEYS};
+use crate::config::{self, Look, OPTIONS};
 use crate::edition;
 use crate::form::Form;
 use crate::palette::{BASE, ERROR, INK, MUTED, PANEL, SEPIA};
@@ -122,7 +122,7 @@ pub struct Window {
     pub error: Option<String>,
     /// Play was pressed while ready: the caller saves and closes.
     pub play: bool,
-    /// The Wheel tab, over `rea_wheel.ini` and the `wheel*` options.
+    /// The Wheel tab, over the `wheel*` options and the calibration.
     pub wheel: WheelTab,
     /// The controllers it shows: DirectInput on Windows, a fixed list in
     /// tests.
@@ -130,13 +130,12 @@ pub struct Window {
 }
 
 impl Window {
-    /// The window over a `launcher.cfg` text and `rea_wheel.ini`'s
+    /// The window over a `launcher.cfg` text and the calibration file's
     /// (`None`: no file yet).
-    pub fn new(text: &str, wheel_ini: Option<&str>, screen: Option<(u32, u32)>) -> Window {
+    pub fn new(text: &str, calibration: Option<&str>, screen: Option<(u32, u32)>) -> Window {
         let form = Form::from_text(text);
         let checked = form.get("game").to_owned();
-        let mut wheel = WheelTab::open(wheel_ini);
-        wheel.setup = form.settings().wheel_setup(wheel_ini.unwrap_or_default());
+        let wheel = WheelTab::new(form.settings().wheel, calibration);
         Window {
             check: check_game(&checked),
             checked,
@@ -153,22 +152,17 @@ impl Window {
         }
     }
 
-    /// The new `rea_wheel.ini`: `existing` with the Wheel tab's settings.
-    pub fn wheel_ini(&self, existing: &str) -> String {
-        self.wheel.save(existing)
+    /// The calibration file's new text (`existing`, its other lines
+    /// kept); `None` while there is no calibration.
+    pub fn calibration_text(&self, existing: &str) -> Option<String> {
+        self.wheel.calibration_text(existing)
     }
 
-    /// The Wheel tab's mode, lock and strength into the form, so Play saves
-    /// them to `launcher.cfg` as their flags spell them.
+    /// The Wheel tab's settings into the form, so Play saves them to
+    /// `launcher.cfg` as their flags spell them.
     fn sync_wheel(&mut self) {
-        let setup = &self.wheel.setup;
-        let values = [
-            setup.mode.key().to_owned(),
-            config::lock_value(setup.wheel.lock),
-            setup.ffb.strength.to_string(),
-        ];
-        for (key, value) in WHEEL_KEYS.into_iter().zip(values) {
-            *self.form.value_mut(key) = value;
+        for row in wheel_options::OPTIONS {
+            *self.form.value_mut(row.key) = self.wheel.setup.value(row.key).unwrap_or_default();
         }
     }
 
@@ -342,15 +336,10 @@ fn look_note(look: Look, screen: Option<(u32, u32)>) -> String {
     format!("{size}{fps}{vsync}")
 }
 
-/// The SDK's Wheel tab; its mode, lock and strength chips are the
-/// `wheel*` options' controls (lock and strength only show unless Off).
+/// The SDK's Wheel tab: its controls are the `wheel*` options' (each
+/// marks its key for the parity test).
 fn wheel_tab(ui: &mut egui::Ui, w: &mut Window) {
     w.wheel.draw(ui, &mut *w.devices);
-    mark_rendered(ui.ctx(), "wheel");
-    if w.wheel.setup.mode != Mode::Off {
-        mark_rendered(ui.ctx(), "wheel_lock");
-        mark_rendered(ui.ctx(), "wheel_ffb");
-    }
     w.sync_wheel();
 }
 
@@ -359,7 +348,7 @@ fn wheel_tab(ui: &mut egui::Ui, w: &mut Window) {
 fn picture_tab(ui: &mut egui::Ui, w: &mut Window) {
     let mut changed = false;
     for row in OPTIONS.iter().filter(|row| {
-        !row.launcher_only && !matches!(row.key, "game" | "look") && !WHEEL_KEYS.contains(&row.key)
+        !row.launcher_only && !matches!(row.key, "game" | "look") && !config::is_wheel_key(row.key)
     }) {
         changed |= spec_row(ui, row, w.form.value_mut(row.key)).changed();
         ui.add_space(10.0);
@@ -443,8 +432,8 @@ mod app {
         path: PathBuf,
         /// The `launcher.cfg` text the window's values are saved into.
         text: String,
-        /// `rea_wheel.ini`, beside `launcher.cfg`.
-        wheel_path: PathBuf,
+        /// The pedal calibration (`rea_wheel.ini`), beside `launcher.cfg`.
+        calibration_path: PathBuf,
         pad: PadNav,
         pending: Vec<Nav>,
         outcome: &'a mut Outcome,
@@ -461,15 +450,15 @@ mod app {
         let fit = WindowFit::new(SIZE, wine::is_wine(), screen, scale).with_native_fit(true);
         let options = fit.native_options(crate::WINDOW_TITLE);
         let text = saved.map_or_else(|| config::first_run_text(screen), str::to_owned);
-        let wheel_path = path.with_file_name(dinput::FILE);
-        let wheel_ini = std::fs::read_to_string(&wheel_path).ok();
+        let calibration_path = path.with_file_name(dinput::FILE);
+        let calibration = std::fs::read_to_string(&calibration_path).ok();
         let mut outcome = Outcome::Closed;
         eframe::run_native(
             crate::WINDOW_TITLE,
             options,
             Box::new(|cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
-                let mut window = Window::new(&text, wheel_ini.as_deref(), screen);
+                let mut window = Window::new(&text, calibration.as_deref(), screen);
                 window.devices = Box::new(DirectInput::start());
                 window.linux = linux;
                 window.pick = || {
@@ -482,7 +471,7 @@ mod app {
                     fit,
                     path: path.to_path_buf(),
                     text: text.clone(),
-                    wheel_path,
+                    calibration_path,
                     pad: PadNav::default(),
                     pending: Vec::new(),
                     outcome: &mut outcome,
@@ -496,10 +485,13 @@ mod app {
     impl App<'_> {
         fn save_and_close(&mut self, ctx: &egui::Context) {
             let text = self.window.form.save(&self.text);
-            let existing = std::fs::read_to_string(&self.wheel_path).unwrap_or_default();
-            let wheel = self.window.wheel_ini(&existing);
-            let saved = fsx::write_atomic(&self.path, text)
-                .and_then(|()| fsx::write_atomic(&self.wheel_path, wheel));
+            let existing = std::fs::read_to_string(&self.calibration_path).unwrap_or_default();
+            let saved = fsx::write_atomic(&self.path, text).and_then(|()| {
+                match self.window.calibration_text(&existing) {
+                    Some(calibration) => fsx::write_atomic(&self.calibration_path, calibration),
+                    None => Ok(()),
+                }
+            });
             match saved {
                 Ok(()) => {
                     *self.outcome = Outcome::Play;
@@ -701,75 +693,108 @@ mod tests {
         ui.run();
     }
 
-    /// What `rea_wheel.ini` gets on Play.
-    fn wheel_ini(ui: &Harness<'static, Window>) -> String {
-        ui.state().wheel_ini("")
-    }
-
-    /// The three chips with an option: each saves its `launcher.cfg` key as
-    /// its flag spells it, and `rea_wheel.ini` the same value.
+    /// Every wheel control saves its `launcher.cfg` key as its flag
+    /// spells it, and reaches the layer's `rea_wheel.ini` in the runtime.
     #[test]
-    fn the_wheel_options_save_what_their_flags_set() {
+    fn every_wheel_control_saves_what_its_flag_sets() {
         let mut ui = wheel_window("", None);
-        for (label, flag, line) in [
-            ("On", ["--wheel", "on"], "mode = on"),
-            ("540°", ["--wheel-lock", "540"], "lock = 540"),
-            ("75 %", ["--wheel-ffb", "75"], "ffb_strength = 75"),
+        for (role, label, flag, value, line) in [
+            (Role::RadioButton, "On", "--wheel", "on", "mode = on"),
+            (
+                Role::RadioButton,
+                "900°",
+                "--wheel-lock",
+                "900",
+                "lock = 900",
+            ),
+            (
+                Role::RadioButton,
+                "4 %",
+                "--wheel-deadzone",
+                "4",
+                "deadzone = 4",
+            ),
+            (
+                Role::RadioButton,
+                "Mild",
+                "--wheel-curve",
+                "40",
+                "linearity = 40",
+            ),
+            (
+                Role::Switch,
+                "Invert throttle",
+                "--wheel-invert-throttle",
+                "on",
+                "invert_accel = on",
+            ),
+            (
+                Role::Switch,
+                "Invert brake",
+                "--wheel-invert-brake",
+                "on",
+                "invert_brake = on",
+            ),
+            (
+                Role::RadioButton,
+                "75 %",
+                "--wheel-ffb",
+                "75",
+                "ffb_strength = 75",
+            ),
+            (
+                Role::Switch,
+                "Reverse force feedback",
+                "--wheel-ffb-invert",
+                "on",
+                "ffb_invert = on",
+            ),
         ] {
-            choose(&mut ui, Role::RadioButton, label);
+            choose(&mut ui, role, label);
             let saved = ui.state().form.settings();
-            let flag = flags(&flag);
-            match label {
-                "On" => assert_eq!(saved.wheel, flag.wheel),
-                "540°" => assert_eq!(saved.wheel_lock, flag.wheel_lock),
-                _ => assert_eq!(saved.wheel_ffb, flag.wheel_ffb),
-            }
-            let ini = wheel_ini(&ui);
-            assert!(ini.contains(line), "{label}: {line} in\n{ini}");
-            assert_eq!(saved.wheel_setup(&ini), ui.state().wheel.setup);
+            let key = flag.trim_start_matches("--").replace('-', "_");
+            assert_eq!(
+                saved.wheel.value(&key),
+                flags(&[flag, value]).wheel.value(&key),
+                "{label}"
+            );
+            assert_eq!(saved.wheel, ui.state().wheel.setup, "{label}");
             let layer = layer_file(&game_gets(&ui));
-            assert!(layer.contains(line), "{label}: the game's {line}");
+            assert!(layer.contains(line), "{label}: {line} in\n{layer}");
         }
         let env = game_gets(&ui).env;
         assert!(env.contains(&(crate::wheel::MODE_ENV, "on")), "{env:?}");
     }
 
-    /// The settings with no option of their own (they live in
-    /// `rea_wheel.ini`, which the window and a text editor both edit) reach
-    /// the layer's file.
+    /// `launcher.cfg` holds the settings; the calibration file only the
+    /// calibration, which the layer's file also gets.
     #[test]
-    fn every_other_wheel_control_saves_to_rea_wheel_ini() {
-        let mut ui = wheel_window("", None);
-        for (role, label, line) in [
-            (Role::RadioButton, "4 %", "deadzone = 4"),
-            (Role::RadioButton, "Mild", "linearity = 40"),
-            (Role::Switch, "Invert throttle", "invert_accel = on"),
-            (Role::Switch, "Invert brake", "invert_brake = on"),
-            (Role::Switch, "Reverse the force", "ffb_invert = on"),
-            (
-                Role::Switch,
-                "Keep a log for bug reports (rea_wheel.log)",
-                "log = on",
-            ),
-        ] {
-            choose(&mut ui, role, label);
-            let ini = wheel_ini(&ui);
-            assert!(ini.contains(line), "{label}: {line} in\n{ini}");
-            assert!(layer_file(&game_gets(&ui)).contains(line), "{label}");
-        }
+    fn the_tab_opens_with_launcher_cfg_and_the_calibration() {
+        let csl = csl();
+        let profile = rea_launcher::wheel::dinput::Profile::guess(csl.id, &csl.initial, None);
+        let calibration = profile.to_cfg("# mine\n", "");
+        let ui = wheel_window("wheel = off\nwheel_lock = 270\n", Some(&calibration));
+        let setup = &ui.state().wheel.setup;
+        assert_eq!(setup.mode, rea_launcher::wheel::dinput::Mode::Off);
+        assert_eq!(setup.wheel.lock.to_setting(), 270);
+        let saved = ui.state().calibration_text(&calibration).unwrap();
+        assert!(saved.starts_with("# mine\n"), "{saved}");
+        assert!(!saved.contains("lock ="), "no settings in it: {saved}");
+        let layer = layer_file(&game_gets_with(&ui, &calibration));
+        assert_eq!(
+            rea_launcher::wheel::dinput::Profile::from_cfg(&layer),
+            Some(profile)
+        );
     }
 
-    /// `launcher.cfg`'s wheel keys win over the file, as the flags do on a
-    /// start; the file's other keys stay.
     #[test]
-    fn the_tab_opens_with_launcher_cfg_over_rea_wheel_ini() {
-        let ini = "# mine\nmode = off\nlock = 900\ndeadzone = 6\n";
-        let ui = wheel_window("wheel = auto\nwheel_lock = 270\n", Some(ini));
-        let setup = &ui.state().wheel.setup;
-        assert_eq!(setup.mode, Mode::Auto);
-        assert_eq!(setup.wheel.lock.to_setting(), 270);
-        assert_eq!(setup.deadzone, 6);
-        assert!(ui.state().wheel_ini(ini).starts_with("# mine\n"));
+    fn the_wheel_starts_at_540_degrees_and_auto() {
+        let ui = wheel_window("", None);
+        assert!(testing::checked(
+            &ui.get_by_role_and_label(Role::RadioButton, "540°")
+        ));
+        assert!(layer_file(&game_gets(&ui)).contains("lock = 540"));
+        assert!(ui.state().calibration_text("").is_none(), "nothing to save");
     }
 
     #[test]
@@ -782,8 +807,11 @@ mod tests {
             .click();
         ui.run();
         assert!(ui.query_by_label("Steering lock").is_none());
-        assert_eq!(ui.state().form.settings().wheel, Some(Mode::Off));
-        assert!(wheel_ini(&ui).contains("mode = off"));
+        assert_eq!(
+            ui.state().form.settings().wheel.mode,
+            rea_launcher::wheel::dinput::Mode::Off
+        );
+        assert!(layer_file(&game_gets(&ui)).contains("mode = off"));
     }
 
     #[test]
@@ -807,10 +835,14 @@ mod tests {
     /// What the game gets from the window's saved files (Wine, no
     /// controller attached).
     fn game_gets(ui: &Harness<'static, Window>) -> crate::plan::Plan {
+        game_gets_with(ui, "")
+    }
+
+    /// [`game_gets`] with a calibration file.
+    fn game_gets_with(ui: &Harness<'static, Window>, calibration: &str) -> crate::plan::Plan {
         let settings = ui.state().form.settings();
         let picture = settings.picture(ui.state().screen);
-        let ini = ui.state().wheel_ini("");
-        let setup = settings.wheel_setup(&ini);
+        let setup = &settings.wheel;
         crate::plan::plan(
             &picture,
             settings.advanced_particles(),
@@ -819,8 +851,8 @@ mod tests {
             true,
         )
         .with_wheel(
-            crate::wheel::shown(&setup, Vec::new),
-            crate::wheel::runtime_ini(&ini, &setup),
+            crate::wheel::shown(setup, Vec::new),
+            crate::wheel::runtime_ini(setup, calibration),
         )
     }
 

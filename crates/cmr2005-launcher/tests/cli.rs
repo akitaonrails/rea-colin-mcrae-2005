@@ -108,20 +108,33 @@ fn bad_command_lines_say_what_is_wrong() {
     assert!(message(&["--wheel-ffb", "150"]).contains("--wheel-ffb"));
 }
 
-/// The wheel flags win over `launcher.cfg`, which wins over
-/// `rea_wheel.ini`; the file's other settings stay.
+/// Every wheel flag sets its key for one run, over `launcher.cfg`; the
+/// file's other wheel keys stay, and the lock starts at 540°.
 #[test]
 fn the_wheel_flags_set_the_wheel_for_one_run() {
-    let ini = "mode = auto\nlock = 540\nffb_strength = 80\ndeadzone = 2\n";
-    let (file, _) = config::parse_file("wheel = on\nwheel_ffb = 60\n");
-    let flags = parse(&["--wheel", "off", "--wheel-lock", "full"])
-        .unwrap()
-        .flags;
-    let setup = file.merged(flags).wheel_setup(ini);
+    let (file, _) = config::parse_file("wheel = on\nwheel_ffb = 60\nwheel_deadzone = 2\n");
+    let flags = parse(&[
+        "--wheel",
+        "off",
+        "--wheel-curve",
+        "40",
+        "--wheel-invert-brake",
+        "on",
+        "--wheel-ffb-invert",
+        "on",
+        "--wheel-pedals",
+        "{pedals}",
+    ])
+    .unwrap()
+    .flags;
+    let setup = file.merged(flags).wheel;
     assert_eq!(setup.mode, WheelMode::Off);
-    assert_eq!(setup.wheel.lock, SteeringLock::Full);
+    assert_eq!(setup.wheel.lock, SteeringLock::Degrees(540));
     assert_eq!(setup.ffb.strength, 60);
     assert_eq!(setup.deadzone, 2);
+    assert_eq!(setup.linearity, 40);
+    assert!(setup.wheel.invert_brake && setup.ffb.invert);
+    assert_eq!(setup.pedals, "{pedals}");
     assert!(
         parse(&["--wheel-lock", "275"]).is_err(),
         "only the listed steps"

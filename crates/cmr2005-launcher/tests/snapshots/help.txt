@@ -12,8 +12,16 @@ Options (each is also a launcher.cfg key):
   --vsync on|off                         VSync
   --advanced-particles on|off            Advanced particles
   --wheel auto|on|off                    Wheel support
+  --wheel-device <guid>                  Wheel
+  --wheel-pedals <guid>                  Pedals
   --wheel-lock 180|270|360|540|900|full  Steering lock
-  --wheel-ffb <0-100>                    Force feedback strength
+  --wheel-deadzone <0-25>                Deadzone
+  --wheel-curve <0-100>                  Curve
+  --wheel-invert-throttle on|off         Invert throttle
+  --wheel-invert-brake on|off            Invert brake
+  --wheel-ffb <0-100>                    FFB strength
+  --wheel-ffb-invert on|off              Reverse force feedback
+  --wheel-log on|off                     Wheel log
   --runtime <folder>                     Private copy folder
 
 Launcher switches:

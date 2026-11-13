@@ -209,9 +209,22 @@ filled in.
 | `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | `0`–`1000`, `off` | no cap | The most frames per second. 60 keeps the game's animations steady. Under Wine and Proton only. |
 | `vsync` / `--vsync` | Picture: VSync | `on`, `off` | the game's own | Waits for the screen: no tearing. Under Wine and Proton only. |
 | `advanced_particles` / `--advanced-particles` | Picture: Advanced particles | `on`, `off` | on | Starts the game with `FORCEHT`, which makes its Advanced particles option available on any processor (it starts on; turn it off here or in the game). Heavy snow on the Swedish stages can hide the road with them on. |
+| `wheel` / `--wheel` | Wheel: Wheel support | `auto`, `on`, `off` | auto | Auto: when a wheel is plugged in as the game starts, the game sees one wheel made from it and your pedals ("rea wheel"), already set up in its controls. On: always. Off: the game sees your controllers as they are. |
+| `wheel_device` / `--wheel-device` | Wheel: Wheel | a DirectInput instance GUID | picked for you | The wheel to drive with. |
+| `wheel_pedals` / `--wheel-pedals` | Wheel: Pedals | a DirectInput instance GUID | the calibrated pedals, else the wheel's own | Pedals on their own USB device. |
+| `wheel_lock` / `--wheel-lock` | Wheel: Steering lock | `180`, `270`, `360`, `540`, `900`, `full` | 540 | How far you turn the wheel for full lock in the game. |
+| `wheel_deadzone` / `--wheel-deadzone` | Wheel: Deadzone | `0`–`25` (percent) | 0 | A band in the centre that does nothing, for a wheel that drifts. |
+| `wheel_curve` / `--wheel-curve` | Wheel: Curve | `0`–`100` | 0 (linear) | Softens small turns near the centre. |
+| `wheel_invert_throttle` / `--wheel-invert-throttle` | Wheel: Invert throttle | `on`, `off` | off | For a throttle that reads backwards. |
+| `wheel_invert_brake` / `--wheel-invert-brake` | Wheel: Invert brake | `on`, `off` | off | For a brake that reads backwards. |
+| `wheel_ffb` / `--wheel-ffb` | Wheel: Strength | `0`–`100` (percent) | 50 | How hard the wheel pushes back; 0 is off. Go lower on a direct-drive wheel. |
+| `wheel_ffb_invert` / `--wheel-ffb-invert` | Wheel: Reverse force feedback | `on`, `off` | off | Only for a wheel that pulls the wrong way. |
+| `wheel_log` / `--wheel-log` | — (file and flag only) | `on`, `off` | off | Writes `rea_wheel.log` next to the game, for bug reports. |
 | `runtime` / `--runtime` | — (file and flag only) | a folder | beside `launcher.log` | Where the launcher keeps its private copy. |
 
-Unset keeps the game's own value (Advanced particles: on).
+Unset keeps the game's own value (Advanced particles: on; the wheel
+options: the values in the Unset column). The pedal calibration the
+Wheel tab makes is kept in `rea_wheel.ini` beside `launcher.cfg`.
 
 Any option on the command line skips the window and plays, overriding
 `launcher.cfg` for that run; only `--game` is remembered. The launcher's

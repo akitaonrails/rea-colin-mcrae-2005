@@ -1,4 +1,4 @@
-flags: --wheel on --wheel-lock 540 --wheel-ffb 60
+flags: --wheel on --wheel-lock 900 --wheel-ffb 60
 screen: 1920x1080, Wine: true
 picture: resolution (game's own), fps_limit (game's own), vsync (game's own)
 
@@ -27,7 +27,7 @@ REA_WHEEL_MODE=on
 [file rea_wheel.ini]
 # rea_wheel.ini - the wheel settings, written by the launcher
 mode = on
-lock = 540
+lock = 900
 invert_accel = off
 invert_brake = off
 device = 
