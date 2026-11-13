@@ -5,21 +5,26 @@
 //! and under `sdk/scripts/wine-test`; `show` wraps it in eframe on Windows.
 //!
 //! Layout: the hero image strip on the left, the title and status, the
-//! Play tab (game folder and look cards) and the Picture tab (every other
-//! option row of `config::OPTIONS`), the footer with the Play plate.
+//! Play tab (game folder and look cards), the Picture tab (the picture
+//! rows of `config::OPTIONS`) and the Wheel tab (the SDK's `WheelTab`,
+//! which edits `rea_wheel.ini` and the `wheel*` options), the footer with
+//! the Play plate.
 //! Any change to the window's look or layout goes through a design skill
 //! (docs/STANDARDS.md "Settings window and CLI").
 
 use std::path::PathBuf;
 
 use rea_launcher::cfg::{OptionSpec, spec};
+use rea_launcher::wheel::dinput::Mode;
+use rea_launcher::wheel::rig::{self, WheelDevices};
 use rea_launcher_ui::egui::{self, Align2, Rect, RichText, TextureHandle, pos2, vec2};
 use rea_launcher_ui::spec::{mark_rendered, spec_path_row, spec_row};
 use rea_launcher_ui::theme::{body, condensed};
+use rea_launcher_ui::wheel::WheelTab;
 use rea_launcher_ui::widgets::{self, Crop, LookCard};
 use rea_launcher_ui::window::Layout;
 
-use crate::config::{Look, OPTIONS};
+use crate::config::{self, Look, OPTIONS, WHEEL_KEYS};
 use crate::edition;
 use crate::form::Form;
 use crate::palette::{BASE, ERROR, INK, MUTED, PANEL, SEPIA};
@@ -40,10 +45,15 @@ pub const HERO_CREDIT: &str = "Photo: KevBow, CC BY 2.0 (Wikimedia Commons)";
 pub enum Tab {
     Play,
     Picture,
+    Wheel,
 }
 
 impl Tab {
-    pub const NAMES: [(Tab, &'static str); 2] = [(Tab::Play, "Play"), (Tab::Picture, "Picture")];
+    pub const NAMES: [(Tab, &'static str); 3] = [
+        (Tab::Play, "Play"),
+        (Tab::Picture, "Picture"),
+        (Tab::Wheel, "Wheel"),
+    ];
 
     /// The next (`by` = 1) or previous (-1) tab, wrapping (pad LB/RB).
     pub fn step(self, by: isize) -> Tab {
@@ -112,13 +122,21 @@ pub struct Window {
     pub error: Option<String>,
     /// Play was pressed while ready: the caller saves and closes.
     pub play: bool,
+    /// The Wheel tab, over `rea_wheel.ini` and the `wheel*` options.
+    pub wheel: WheelTab,
+    /// The controllers it shows: DirectInput on Windows, a fixed list in
+    /// tests.
+    pub devices: Box<dyn WheelDevices>,
 }
 
 impl Window {
-    /// The window over a `launcher.cfg` text.
-    pub fn new(text: &str, screen: Option<(u32, u32)>) -> Window {
+    /// The window over a `launcher.cfg` text and `rea_wheel.ini`'s
+    /// (`None`: no file yet).
+    pub fn new(text: &str, wheel_ini: Option<&str>, screen: Option<(u32, u32)>) -> Window {
         let form = Form::from_text(text);
         let checked = form.get("game").to_owned();
+        let mut wheel = WheelTab::open(wheel_ini);
+        wheel.setup = form.settings().wheel_setup(wheel_ini.unwrap_or_default());
         Window {
             check: check_game(&checked),
             checked,
@@ -130,6 +148,27 @@ impl Window {
             hero: None,
             error: None,
             play: false,
+            wheel,
+            devices: Box::new(rig::Fixed::default()),
+        }
+    }
+
+    /// The new `rea_wheel.ini`: `existing` with the Wheel tab's settings.
+    pub fn wheel_ini(&self, existing: &str) -> String {
+        self.wheel.save(existing)
+    }
+
+    /// The Wheel tab's mode, lock and strength into the form, so Play saves
+    /// them to `launcher.cfg` as their flags spell them.
+    fn sync_wheel(&mut self) {
+        let setup = &self.wheel.setup;
+        let values = [
+            setup.mode.key().to_owned(),
+            config::lock_value(setup.wheel.lock),
+            setup.ffb.strength.to_string(),
+        ];
+        for (key, value) in WHEEL_KEYS.into_iter().zip(values) {
+            *self.form.value_mut(key) = value;
         }
     }
 
@@ -183,6 +222,7 @@ pub fn draw(ui: &mut egui::Ui, w: &mut Window) {
         widgets::tab_body(ui, w.tab, |ui| match w.tab {
             Tab::Play => play_tab(ui, w),
             Tab::Picture => picture_tab(ui, w),
+            Tab::Wheel => wheel_tab(ui, w),
         });
     });
     let hint = "Your game folder is never changed. Settings are saved when you press Play.";
@@ -302,13 +342,25 @@ fn look_note(look: Look, screen: Option<(u32, u32)>) -> String {
     format!("{size}{fps}{vsync}")
 }
 
-/// Every option row that is not on the Play tab and has a window control.
+/// The SDK's Wheel tab; its mode, lock and strength chips are the
+/// `wheel*` options' controls (lock and strength only show unless Off).
+fn wheel_tab(ui: &mut egui::Ui, w: &mut Window) {
+    w.wheel.draw(ui, &mut *w.devices);
+    mark_rendered(ui.ctx(), "wheel");
+    if w.wheel.setup.mode != Mode::Off {
+        mark_rendered(ui.ctx(), "wheel_lock");
+        mark_rendered(ui.ctx(), "wheel_ffb");
+    }
+    w.sync_wheel();
+}
+
+/// Every option row with a window control that is not on the Play or the
+/// Wheel tab.
 fn picture_tab(ui: &mut egui::Ui, w: &mut Window) {
     let mut changed = false;
-    for row in OPTIONS
-        .iter()
-        .filter(|row| !row.launcher_only && !matches!(row.key, "game" | "look"))
-    {
+    for row in OPTIONS.iter().filter(|row| {
+        !row.launcher_only && !matches!(row.key, "game" | "look") && !WHEEL_KEYS.contains(&row.key)
+    }) {
         changed |= spec_row(ui, row, w.form.value_mut(row.key)).changed();
         ui.add_space(10.0);
     }
@@ -335,12 +387,14 @@ mod app {
     use std::time::Duration;
 
     use rea_launcher::fsx;
+    use rea_launcher::wheel::dinput;
     use rea_launcher_ui::eframe;
     use rea_launcher_ui::egui;
     use rea_launcher_ui::pad::{self, Nav, PadNav};
     use rea_launcher_ui::theme;
     use rea_launcher_ui::widgets;
     use rea_launcher_ui::window::{SIZE, WindowFit};
+    use rea_launcher_win32::dinput::DirectInput;
     use rea_launcher_win32::{dialog, display, wine, xinput};
 
     use rea_launcher::installer::{Installer, UnpackJob, UnpackOutcome};
@@ -389,6 +443,8 @@ mod app {
         path: PathBuf,
         /// The `launcher.cfg` text the window's values are saved into.
         text: String,
+        /// `rea_wheel.ini`, beside `launcher.cfg`.
+        wheel_path: PathBuf,
         pad: PadNav,
         pending: Vec<Nav>,
         outcome: &'a mut Outcome,
@@ -405,13 +461,16 @@ mod app {
         let fit = WindowFit::new(SIZE, wine::is_wine(), screen, scale).with_native_fit(true);
         let options = fit.native_options(crate::WINDOW_TITLE);
         let text = saved.map_or_else(|| config::first_run_text(screen), str::to_owned);
+        let wheel_path = path.with_file_name(dinput::FILE);
+        let wheel_ini = std::fs::read_to_string(&wheel_path).ok();
         let mut outcome = Outcome::Closed;
         eframe::run_native(
             crate::WINDOW_TITLE,
             options,
             Box::new(|cc| {
                 theme::install_with(&cc.egui_ctx, &PALETTE, &METRICS);
-                let mut window = Window::new(&text, screen);
+                let mut window = Window::new(&text, wheel_ini.as_deref(), screen);
+                window.devices = Box::new(DirectInput::start());
                 window.linux = linux;
                 window.pick = || {
                     dialog::pick_folder("Choose the folder with cmr5.exe or setup_colin2005.exe")
@@ -423,6 +482,7 @@ mod app {
                     fit,
                     path: path.to_path_buf(),
                     text: text.clone(),
+                    wheel_path,
                     pad: PadNav::default(),
                     pending: Vec::new(),
                     outcome: &mut outcome,
@@ -436,7 +496,11 @@ mod app {
     impl App<'_> {
         fn save_and_close(&mut self, ctx: &egui::Context) {
             let text = self.window.form.save(&self.text);
-            match fsx::write_atomic(&self.path, text) {
+            let existing = std::fs::read_to_string(&self.wheel_path).unwrap_or_default();
+            let wheel = self.window.wheel_ini(&existing);
+            let saved = fsx::write_atomic(&self.path, text)
+                .and_then(|()| fsx::write_atomic(&self.wheel_path, wheel));
+            match saved {
                 Ok(()) => {
                     *self.outcome = Outcome::Play;
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -495,7 +559,7 @@ mod tests {
         testing::harness(
             &PALETTE,
             &METRICS,
-            Window::new(text, Some((1920, 1080))),
+            Window::new(text, None, Some((1920, 1080))),
             draw,
         )
     }
@@ -588,9 +652,132 @@ mod tests {
     #[test]
     fn the_window_has_a_control_for_every_option_and_no_other() {
         let mut ui = open("");
-        ui.get_by_role_and_label(Role::Tab, "Picture").click();
-        ui.run();
+        for tab in ["Picture", "Wheel"] {
+            ui.get_by_role_and_label(Role::Tab, tab).click();
+            ui.run();
+        }
         spec::assert_parity(OPTIONS, &rendered_keys(&ui.ctx));
+    }
+
+    /// A CSL DD with its pedals in the base, resting.
+    fn csl() -> rig::Device {
+        use rea_launcher::wheel::{DeviceId, DeviceState, Kind};
+        let state = DeviceState {
+            axes: vec![0, 32_767, 32_767, 0, 0, 0, 0, 0],
+            buttons: vec![false; 12],
+        };
+        rig::Device {
+            id: DeviceId {
+                name: "FANATEC CSL DD".into(),
+                vid: 0x0eb7,
+                pid: 0x0020,
+                guid: "{csl}".into(),
+            },
+            kind: Kind::Wheel,
+            axes: 8,
+            buttons: 12,
+            ffb: true,
+            initial: state.clone(),
+            state,
+        }
+    }
+
+    /// The window on its Wheel tab with a wheel attached, tall enough that
+    /// the whole tab is in view.
+    fn wheel_window(text: &str, ini: Option<&str>) -> Harness<'static, Window> {
+        let mut window = Window::new(text, ini, Some((1920, 1080)));
+        window.devices = Box::new(rig::Fixed {
+            devices: vec![csl()],
+            ..rig::Fixed::default()
+        });
+        let mut ui = testing::harness_sized(&PALETTE, &METRICS, vec2(1280.0, 2400.0), window, draw);
+        ui.get_by_role_and_label(Role::Tab, "Wheel").click();
+        ui.run();
+        ui
+    }
+
+    fn choose(ui: &mut Harness<'static, Window>, role: Role, label: &str) {
+        ui.get_by_role_and_label(role, label).click();
+        ui.run();
+    }
+
+    /// What `rea_wheel.ini` gets on Play.
+    fn wheel_ini(ui: &Harness<'static, Window>) -> String {
+        ui.state().wheel_ini("")
+    }
+
+    /// The three chips with an option: each saves its `launcher.cfg` key as
+    /// its flag spells it, and `rea_wheel.ini` the same value.
+    #[test]
+    fn the_wheel_options_save_what_their_flags_set() {
+        let mut ui = wheel_window("", None);
+        for (label, flag, line) in [
+            ("On", ["--wheel", "on"], "mode = on"),
+            ("540°", ["--wheel-lock", "540"], "lock = 540"),
+            ("75 %", ["--wheel-ffb", "75"], "ffb_strength = 75"),
+        ] {
+            choose(&mut ui, Role::RadioButton, label);
+            let saved = ui.state().form.settings();
+            let flag = flags(&flag);
+            match label {
+                "On" => assert_eq!(saved.wheel, flag.wheel),
+                "540°" => assert_eq!(saved.wheel_lock, flag.wheel_lock),
+                _ => assert_eq!(saved.wheel_ffb, flag.wheel_ffb),
+            }
+            let ini = wheel_ini(&ui);
+            assert!(ini.contains(line), "{label}: {line} in\n{ini}");
+            assert_eq!(saved.wheel_setup(&ini), ui.state().wheel.setup);
+        }
+    }
+
+    /// The tab-only settings (no flag: STANDARDS allows a tab's one-off
+    /// tuning in its own file) reach `rea_wheel.ini`.
+    #[test]
+    fn every_other_wheel_control_saves_to_rea_wheel_ini() {
+        let mut ui = wheel_window("", None);
+        for (role, label, line) in [
+            (Role::RadioButton, "4 %", "deadzone = 4"),
+            (Role::RadioButton, "Mild", "linearity = 40"),
+            (Role::Switch, "Invert throttle", "invert_accel = on"),
+            (Role::Switch, "Invert brake", "invert_brake = on"),
+            (Role::Switch, "Reverse the force", "ffb_invert = on"),
+            (
+                Role::Switch,
+                "Keep a log for bug reports (rea_wheel.log)",
+                "log = on",
+            ),
+        ] {
+            choose(&mut ui, role, label);
+            let ini = wheel_ini(&ui);
+            assert!(ini.contains(line), "{label}: {line} in\n{ini}");
+        }
+    }
+
+    /// `launcher.cfg`'s wheel keys win over the file, as the flags do on a
+    /// start; the file's other keys stay.
+    #[test]
+    fn the_tab_opens_with_launcher_cfg_over_rea_wheel_ini() {
+        let ini = "# mine\nmode = off\nlock = 900\ndeadzone = 6\n";
+        let ui = wheel_window("wheel = auto\nwheel_lock = 270\n", Some(ini));
+        let setup = &ui.state().wheel.setup;
+        assert_eq!(setup.mode, Mode::Auto);
+        assert_eq!(setup.wheel.lock.to_setting(), 270);
+        assert_eq!(setup.deadzone, 6);
+        assert!(ui.state().wheel_ini(ini).starts_with("# mine\n"));
+    }
+
+    #[test]
+    fn wheel_support_off_shows_nothing_else_and_saves_off() {
+        let mut ui = wheel_window("", None);
+        // The first "Off" is wheel support's; force feedback has one too.
+        ui.get_all_by_role_and_label(Role::RadioButton, "Off")
+            .next()
+            .unwrap()
+            .click();
+        ui.run();
+        assert!(ui.query_by_label("Steering lock").is_none());
+        assert_eq!(ui.state().form.settings().wheel, Some(Mode::Off));
+        assert!(wheel_ini(&ui).contains("mode = off"));
     }
 
     #[test]
@@ -774,10 +961,14 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// The pad's LB/RB (and the window's tab cycling) reach the Wheel tab.
     #[test]
     fn tabs_step_and_wrap() {
         assert_eq!(Tab::Play.step(1), Tab::Picture);
-        assert_eq!(Tab::Play.step(-1), Tab::Picture);
-        assert_eq!(Tab::Picture.step(1), Tab::Play);
+        assert_eq!(Tab::Picture.step(1), Tab::Wheel);
+        assert_eq!(Tab::Wheel.step(1), Tab::Play);
+        assert_eq!(Tab::Play.step(-1), Tab::Wheel);
+        let names: Vec<&str> = Tab::NAMES.iter().map(|(_, name)| *name).collect();
+        assert_eq!(names, ["Play", "Picture", "Wheel"]);
     }
 }

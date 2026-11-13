@@ -18,6 +18,8 @@ use rea_launcher::cfg::{
     self, ArgError, KeyStyle, Kind, OptionSpec, Rejected, Resolution, Value, spec,
 };
 use rea_launcher::display;
+use rea_launcher::wheel::SteeringLock;
+use rea_launcher::wheel::dinput::{Mode, Setup};
 
 /// The settings file, next to the exe (portable) or in the launcher's
 /// AppData folder.
@@ -36,6 +38,30 @@ pub const LOOKS: &[(&str, &str)] = &[
     ("widescreen", "Widescreen"),
     ("steam_deck", "Steam Deck"),
 ];
+
+/// The `wheel` values: when the game sees the virtual wheel.
+pub const WHEEL_MODES: &[(&str, &str)] = &[("auto", "Auto"), ("on", "On"), ("off", "Off")];
+
+/// The `wheel_lock` values: the steering lock steps, in degrees.
+pub const WHEEL_LOCKS: &[(&str, &str)] = &[
+    ("180", "180°"),
+    ("270", "270°"),
+    ("360", "360°"),
+    ("540", "540°"),
+    ("900", "900°"),
+    ("full", "Full"),
+];
+
+/// The options the window's Wheel tab sets; the Picture tab leaves them.
+pub const WHEEL_KEYS: [&str; 3] = ["wheel", "wheel_lock", "wheel_ffb"];
+
+/// `launcher.cfg`'s spelling of a steering lock (a [`WHEEL_LOCKS`] value).
+pub fn lock_value(lock: SteeringLock) -> String {
+    match lock {
+        SteeringLock::Full => "full".to_owned(),
+        SteeringLock::Degrees(degrees) => degrees.to_string(),
+    }
+}
 
 /// The Steam Deck look's size: the 16:9 size of the Deck's width, so the
 /// game's widescreen view is exact (it is only correct at 16:9; on the
@@ -105,6 +131,29 @@ pub const OPTIONS: &[OptionSpec] = &[
          them off here or in the game's Options, Graphics. Heavy snow on the Swedish stages \
          can hide the road with them on.",
     ),
+    OptionSpec::new(
+        "wheel",
+        Kind::Choice(WHEEL_MODES),
+        "Wheel support",
+        "Auto: when a wheel is plugged in as the game starts, the game sees one wheel made \
+         from it and your pedals, already set up in its controls. On: always. Off: the game \
+         sees your controllers as they are. The rest of the wheel settings are on the \
+         window's Wheel tab (rea_wheel.ini).",
+    ),
+    OptionSpec::new(
+        "wheel_lock",
+        Kind::Choice(WHEEL_LOCKS),
+        "Steering lock",
+        "How far your wheel turns from full left to full right in the game, in degrees; \
+         Full uses the wheel's whole rotation.",
+    ),
+    OptionSpec::new(
+        "wheel_ffb",
+        Kind::Range { min: 0, max: 100 },
+        "Force feedback strength",
+        "The wheel's force feedback in percent of what the game asks; 0 turns it off.",
+    )
+    .with_example("75"),
     OptionSpec::new(
         "runtime",
         Kind::Path,
@@ -274,6 +323,10 @@ pub struct Settings {
     pub vsync: Option<bool>,
     /// `None`: on (the game's `FORCEHT` switch, docs/RESEARCH.md).
     pub advanced_particles: Option<bool>,
+    /// The wheel settings set here; `None` keeps `rea_wheel.ini`'s.
+    pub wheel: Option<Mode>,
+    pub wheel_lock: Option<SteeringLock>,
+    pub wheel_ffb: Option<u8>,
     pub runtime: Option<PathBuf>,
 }
 
@@ -296,6 +349,16 @@ impl Settings {
             ("fps_limit", Value::Number(fps)) => self.fps_limit = Some(fps),
             ("vsync", Value::Toggle(on)) => self.vsync = Some(on),
             ("advanced_particles", Value::Toggle(on)) => self.advanced_particles = Some(on),
+            ("wheel", Value::Choice(mode)) => {
+                self.wheel = Some(Mode::parse(mode).ok_or(Rejected::Unknown)?);
+            }
+            ("wheel_lock", Value::Choice(lock)) => {
+                let degrees = lock.parse::<i64>().unwrap_or(0);
+                self.wheel_lock = Some(SteeringLock::from_setting(degrees));
+            }
+            ("wheel_ffb", Value::Number(strength)) => {
+                self.wheel_ffb = Some(u8::try_from(strength).map_err(|_| Rejected::Unknown)?);
+            }
             _ => return Err(Rejected::Unknown),
         }
         Ok(())
@@ -316,7 +379,20 @@ impl Settings {
         self.fps_limit = flags.fps_limit.or(self.fps_limit);
         self.vsync = flags.vsync.or(self.vsync);
         self.advanced_particles = flags.advanced_particles.or(self.advanced_particles);
+        self.wheel = flags.wheel.or(self.wheel);
+        self.wheel_lock = flags.wheel_lock.or(self.wheel_lock);
+        self.wheel_ffb = flags.wheel_ffb.or(self.wheel_ffb);
         self
+    }
+
+    /// The Wheel tab's settings from `rea_wheel.ini`'s text, with the
+    /// wheel options set here on top.
+    pub fn wheel_setup(&self, ini: &str) -> Setup {
+        let mut setup = Setup::from_cfg(ini);
+        setup.mode = self.wheel.unwrap_or(setup.mode);
+        setup.wheel.lock = self.wheel_lock.unwrap_or(setup.wheel.lock);
+        setup.ffb.strength = self.wheel_ffb.unwrap_or(setup.ffb.strength);
+        setup
     }
 
     /// Whether the game gets `FORCEHT`, which unlocks its Advanced
@@ -531,6 +607,31 @@ mod tests {
         assert!(off.merged(flags).advanced_particles(), "a flag wins");
         let (look, _) = parse_file("advanced_particles = off\nlook = widescreen\n");
         assert!(!look.advanced_particles(), "a look leaves it alone");
+    }
+
+    #[test]
+    fn the_wheel_options_win_over_rea_wheel_ini() {
+        let ini = "mode = off\nlock = 540\nffb_strength = 40\ndeadzone = 3\n";
+        assert_eq!(Settings::default().wheel_setup(ini), Setup::from_cfg(ini));
+        let (file, warnings) = parse_file("wheel = on\nwheel_lock = full\nwheel_ffb = 70\n");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let setup = file.wheel_setup(ini);
+        assert_eq!(setup.mode, Mode::On);
+        assert_eq!(setup.wheel.lock, SteeringLock::Full);
+        assert_eq!(setup.ffb.strength, 70);
+        assert_eq!(setup.deadzone, 3, "the rest is the file's");
+        let (flags, _) = parse_args(["--wheel-lock".into(), "270".into()]).unwrap();
+        let merged = file.merged(flags);
+        assert_eq!(merged.wheel_lock, Some(SteeringLock::Degrees(270)));
+        assert_eq!(merged.wheel, Some(Mode::On));
+    }
+
+    #[test]
+    fn bad_wheel_values_say_what_they_need() {
+        let (settings, warnings) =
+            parse_file("wheel = maybe\nwheel_lock = 1080\nwheel_ffb = 150\n");
+        assert_eq!(settings, Settings::default());
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
     }
 
     #[test]

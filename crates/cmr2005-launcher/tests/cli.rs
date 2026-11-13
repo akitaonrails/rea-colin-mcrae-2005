@@ -10,6 +10,8 @@ use cmr2005_launcher::edition;
 use cmr2005_launcher::source;
 use rea_launcher::cfg::{Kind, Resolution};
 use rea_launcher::identify;
+use rea_launcher::wheel::SteeringLock;
+use rea_launcher::wheel::dinput::Mode as WheelMode;
 
 fn parse(args: &[&str]) -> Result<Invocation, String> {
     cli::parse(args.iter().map(|arg| (*arg).to_owned()))
@@ -101,6 +103,29 @@ fn bad_command_lines_say_what_is_wrong() {
     assert!(message(&["--frobnicate"]).contains("unknown argument --frobnicate"));
     assert!(message(&["--frobnicate"]).contains("--help"));
     assert!(message(&["--settings", "--no-window"]).contains("cannot be used together"));
+    assert!(message(&["--wheel", "maybe"]).contains("--wheel needs auto, on or off"));
+    assert!(message(&["--wheel-lock", "1080"]).contains("180, 270, 360, 540, 900 or full"));
+    assert!(message(&["--wheel-ffb", "150"]).contains("--wheel-ffb"));
+}
+
+/// The wheel flags win over `launcher.cfg`, which wins over
+/// `rea_wheel.ini`; the file's other settings stay.
+#[test]
+fn the_wheel_flags_set_the_wheel_for_one_run() {
+    let ini = "mode = auto\nlock = 540\nffb_strength = 80\ndeadzone = 2\n";
+    let (file, _) = config::parse_file("wheel = on\nwheel_ffb = 60\n");
+    let flags = parse(&["--wheel", "off", "--wheel-lock", "full"])
+        .unwrap()
+        .flags;
+    let setup = file.merged(flags).wheel_setup(ini);
+    assert_eq!(setup.mode, WheelMode::Off);
+    assert_eq!(setup.wheel.lock, SteeringLock::Full);
+    assert_eq!(setup.ffb.strength, 60);
+    assert_eq!(setup.deadzone, 2);
+    assert!(
+        parse(&["--wheel-lock", "275"]).is_err(),
+        "only the listed steps"
+    );
 }
 
 #[test]

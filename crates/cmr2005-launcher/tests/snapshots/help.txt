@@ -11,6 +11,9 @@ Options (each is also a launcher.cfg key):
   --fps-limit <0-1000>                   Frame-rate cap
   --vsync on|off                         VSync
   --advanced-particles on|off            Advanced particles
+  --wheel auto|on|off                    Wheel support
+  --wheel-lock 180|270|360|540|900|full  Steering lock
+  --wheel-ffb <0-100>                    Force feedback strength
   --runtime <folder>                     Private copy folder
 
 Launcher switches:
