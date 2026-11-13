@@ -3,9 +3,9 @@ screen: 1920x1080, Wine: true
 picture: resolution 1280x720, fps_limit 60, vsync on
 
 arguments: WIDESCREENDISPLAY, FORCEHT
-components installed: d3d9.dll, rea_close_hook.dll
+components installed: d3d9.dll, rea_close_hook.dll, rea_dinput.dll
 components taken out: (none)
-cmr5.exe imports: rea_close_hook.dll
+cmr5.exe imports: rea_close_hook.dll, rea_dinput.dll
 prefer fast GPU: false
 
 [registry HKCU\Software\Codemasters\Colin McRae Rally 2005]

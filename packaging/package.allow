@@ -20,3 +20,4 @@ licenses/innoextract/libstdc++.COPYING.RUNTIME.txt
 components/d3d9.dll
 components/innoextract.exe
 components/rea_close_hook.dll
+components/rea_dinput.dll

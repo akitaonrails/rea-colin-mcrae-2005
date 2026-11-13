@@ -491,7 +491,7 @@ mod app {
     }
 
     /// `--check`'s problems with the game's key: the redirect's rules, the
-    /// close hook DLL, the player's `cmr5.exe` taking its import (the
+    /// close hook and wheel layer DLLs, the player's `cmr5.exe` taking their imports (the
     /// runtime copy is made from it on every Play), and the paths written
     /// and read back (the game's old values carried over, as Play does).
     fn check_key(components_dir: &Path, source: &Source, folders: &Folders) -> Vec<String> {
@@ -499,9 +499,11 @@ mod app {
         if let Err(error) = registry::redirect() {
             problems.push(error.to_string());
         }
-        let dll = components_dir.join(components::CLOSE_HOOK_DLL);
-        if !dll.is_file() {
-            problems.push(format!("{} is missing", dll.display()));
+        for name in [components::CLOSE_HOOK_DLL, components::WHEEL_DLL] {
+            let dll = components_dir.join(name);
+            if !dll.is_file() {
+                problems.push(format!("{} is missing", dll.display()));
+            }
         }
         let exe_dir = match source {
             Source::Installed { dir, .. } => Some(dir),

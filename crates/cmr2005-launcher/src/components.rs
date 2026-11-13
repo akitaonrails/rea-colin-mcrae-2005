@@ -14,6 +14,10 @@
 //!   which imports it (`runtime::write_game_exe`): Windows loads it with
 //!   the game and it attaches itself; the launcher never hooks the
 //!   running game.
+//! - The SDK's wheel layer (`rea_dinput.dll`), imported by the runtime's
+//!   `cmr5.exe` after the close hook: it shows the game one virtual wheel
+//!   made from the player's wheel and pedals (`crate::wheel`); off, it
+//!   hands the game its DirectInput untouched.
 //! - innoextract (`innoextract.exe`, zlib), which unpacks GOG's installer
 //!   (`rea_launcher_win32::innoextract`, [`crate::source`]); needed only
 //!   when the game folder holds the installer, never copied into the
@@ -31,6 +35,7 @@ pub const DIR: &str = "components";
 
 pub const DXVK_DLL: &str = "d3d9.dll";
 pub const CLOSE_HOOK_DLL: &str = "rea_close_hook.dll";
+pub const WHEEL_DLL: &str = crate::wheel::DLL;
 /// `rea_launcher_win32::innoextract::EXE`.
 pub const INNOEXTRACT: &str = "innoextract.exe";
 
@@ -51,19 +56,22 @@ pub fn version(name: &str) -> &'static str {
     match name {
         DXVK_DLL => "DXVK 3.1.1",
         CLOSE_HOOK_DLL => "rea-launcher-close-hook",
+        WHEEL_DLL => "rea-launcher-dinput",
         INNOEXTRACT => "innoextract 1.9",
         _ => "",
     }
 }
 
-/// The bundled files a launch needs: DXVK under Wine, the close hook
-/// always, innoextract when the game is still GOG's installer.
+/// The bundled files a launch needs: DXVK under Wine, the close hook and
+/// the wheel layer always, innoextract when the game is still GOG's
+/// installer.
 pub fn needed(wine: bool, installer: bool) -> Vec<&'static str> {
     let mut names = Vec::new();
     if wine {
         names.push(DXVK_DLL);
     }
     names.push(CLOSE_HOOK_DLL);
+    names.push(WHEEL_DLL);
     if installer {
         names.push(INNOEXTRACT);
     }
@@ -93,7 +101,7 @@ pub fn validate(components: &Path, wine: bool, installer: bool) -> Result<(), St
 
 /// `name: SHA-256 (version)` of each bundled file there, for the log.
 pub fn describe(components: &Path) -> Vec<String> {
-    [DXVK_DLL, CLOSE_HOOK_DLL, INNOEXTRACT]
+    [DXVK_DLL, CLOSE_HOOK_DLL, WHEEL_DLL, INNOEXTRACT]
         .into_iter()
         .filter_map(|name| {
             let digest = identify::sha256_file(&components.join(name)).ok()?;
@@ -156,10 +164,16 @@ mod tests {
 
     #[test]
     fn dxvk_is_needed_only_under_wine_and_innoextract_only_for_the_installer() {
-        assert_eq!(needed(true, false), [DXVK_DLL, CLOSE_HOOK_DLL]);
-        assert_eq!(needed(false, false), [CLOSE_HOOK_DLL]);
-        assert_eq!(needed(false, true), [CLOSE_HOOK_DLL, INNOEXTRACT]);
-        assert_eq!(needed(true, true), [DXVK_DLL, CLOSE_HOOK_DLL, INNOEXTRACT]);
+        assert_eq!(needed(true, false), [DXVK_DLL, CLOSE_HOOK_DLL, WHEEL_DLL]);
+        assert_eq!(needed(false, false), [CLOSE_HOOK_DLL, WHEEL_DLL]);
+        assert_eq!(
+            needed(false, true),
+            [CLOSE_HOOK_DLL, WHEEL_DLL, INNOEXTRACT]
+        );
+        assert_eq!(
+            needed(true, true),
+            [DXVK_DLL, CLOSE_HOOK_DLL, WHEEL_DLL, INNOEXTRACT]
+        );
     }
 
     #[cfg(windows)]
@@ -175,12 +189,20 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let error = validate(&dir, true, false).unwrap_err();
         assert!(
-            error.contains("d3d9.dll and rea_close_hook.dll are missing"),
+            error.contains("d3d9.dll, rea_close_hook.dll and rea_dinput.dll are missing"),
             "{error}"
         );
         let error = validate(&dir, true, true).unwrap_err();
         assert!(
-            error.contains("d3d9.dll, rea_close_hook.dll and innoextract.exe are missing"),
+            error.contains(
+                "d3d9.dll, rea_close_hook.dll, rea_dinput.dll and innoextract.exe are missing"
+            ),
+            "{error}"
+        );
+        fs::write(dir.join(WHEEL_DLL), b"layer").unwrap();
+        let error = validate(&dir, false, false).unwrap_err();
+        assert!(
+            error.contains("launcher's rea_close_hook.dll is missing"),
             "{error}"
         );
         fs::write(dir.join(CLOSE_HOOK_DLL), b"hook").unwrap();
@@ -193,9 +215,13 @@ mod tests {
         let error = validate(&dir, true, false).unwrap_err();
         assert!(error.contains("launcher's d3d9.dll is missing"), "{error}");
         let described = describe(&dir);
-        assert_eq!(described.len(), 1);
+        assert_eq!(described.len(), 2);
         assert!(
             described[0].starts_with("rea_close_hook.dll: "),
+            "{described:?}"
+        );
+        assert!(
+            described[1].ends_with("(rea-launcher-dinput)"),
             "{described:?}"
         );
         fs::remove_dir_all(&dir).unwrap();

@@ -10,7 +10,7 @@ repository = "https://github.com/akitaonrails/rea-colin-mcrae-2005"
 
 [workspace.dependencies]
 # The shared launcher SDK, pinned to a release tag. To move to a new release,
-# change the tag on all five lines, re-run `scripts/sdk-sync` from that SDK
+# change the tag on all six lines, re-run `scripts/sdk-sync` from that SDK
 # checkout and move the `@vX.Y.Z` of the workflows in .github/workflows/build.yml
 # (rea-launcher-sdk docs/playbooks/sdk-change.md).
 rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2" }
@@ -18,10 +18,14 @@ rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk",
 rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2" }
 # build.rs: version information, icon and manifest in CMR2005Launcher.exe.
 rea-launcher-build = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2" }
-# The close hook DLL shipped in components/ (built with
-# `cargo build -p rea-launcher-close-hook`); its parser checks our
-# configuration in the host tests.
-rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2" }
+# The close hook and wheel layer DLLs shipped in components/ (each built
+# with its `dll` feature: `cargo build -p rea-launcher-close-hook --features
+# rea-launcher-close-hook/dll`, the same for rea-launcher-dinput). The
+# launcher links their libraries without it (one exe can't hold both
+# DllMains): import_into edits the runtime copy of cmr5.exe, and the hook's
+# parser checks our configuration in the host tests.
+rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2", default-features = false }
+rea-launcher-dinput = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.8.2", default-features = false }
 
 [profile.release]
 panic = "abort"
@@ -29,12 +33,20 @@ opt-level = "s"
 lto = true
 strip = true
 
+# The close hook and wheel layer DLLs (packaging/build-dlls.sh): their
+# catch_unwind guards turn a panic into an error code for one call, which
+# needs unwinding; under "abort" a panic would end the game.
+[profile.dll]
+inherits = "release"
+panic = "unwind"
+
 # TEMPORARY: the wheel work builds on the SDK's unreleased feat/dinput-wheel
 # branch in a local checkout. Replace this section with the v0.9.0 tag on the
-# five lines above (and `cargo update`) when that SDK is released.
+# six lines above (and `cargo update`) when that SDK is released.
 [patch."https://github.com/akitaonrails/rea-launcher-sdk"]
 rea-launcher = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher" }
 rea-launcher-win32 = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-win32" }
 rea-launcher-ui = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-ui" }
 rea-launcher-build = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-build" }
 rea-launcher-close-hook = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-close-hook" }
+rea-launcher-dinput = { path = "/mnt/data/Projects/rea-launcher-sdk/crates/rea-launcher-dinput" }

@@ -62,15 +62,18 @@ fn sync(game: &Path, runtime: &Path) -> io::Result<SyncReport> {
 }
 
 /// The runtime's `cmr5.exe`, made from the player's `bytes`: the close
-/// hook's DLL (`rea_close_hook.dll`) added to its import table, so Windows
-/// loads it with the game and the launcher never touches the running game
+/// hook's DLL (`rea_close_hook.dll`), then the wheel layer's
+/// (`rea_dinput.dll`) added to its import table, so Windows loads them
+/// with the game and the launcher never touches the running game
 /// (antivirus heuristics take a hook installed from outside for a
-/// keylogger). The DLL also gives the game its registry key from HKCU
-/// (`registry::REDIRECT`), so an exe that can't take the import is an
+/// keylogger). The hook also gives the game its registry key from HKCU
+/// (`registry::REDIRECT`), so an exe that can't take the imports is an
 /// error: the game would not find its folders. `--check` asks the same.
 pub fn game_exe(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    rea_close_hook::import_into(bytes)
-        .map_err(|error| format!("{GAME_EXE} can't import {} ({error})", rea_close_hook::DLL))
+    let hooked = rea_close_hook::import_into(bytes)
+        .map_err(|error| format!("{GAME_EXE} can't import {} ({error})", rea_close_hook::DLL))?;
+    rea_dinput::import_into(&hooked)
+        .map_err(|error| format!("{GAME_EXE} can't import {} ({error})", rea_dinput::DLL))
 }
 
 /// The player's `cmr5.exe` in `game`, and its bytes.
@@ -192,13 +195,13 @@ mod tests {
             "an already hooked exe is unchanged"
         );
         let imports = rea_launcher::pe::edit::imports(&first).unwrap();
-        assert_eq!(
-            imports
+        for dll in [rea_close_hook::DLL, crate::wheel::DLL] {
+            let count = imports
                 .iter()
-                .filter(|i| i.dll.eq_ignore_ascii_case(rea_close_hook::DLL))
-                .count(),
-            1
-        );
+                .filter(|i| i.dll.eq_ignore_ascii_case(dll))
+                .count();
+            assert_eq!(count, 1, "{dll}");
+        }
         assert_eq!(
             fs::read(paths::find_ignoring_case(&game, GAME_EXE).unwrap()).unwrap(),
             player

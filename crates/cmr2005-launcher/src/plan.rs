@@ -7,7 +7,9 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
-use crate::components::{self, APP_OVERRIDES, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DXVK_DLL};
+use crate::components::{
+    self, APP_OVERRIDES, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DXVK_DLL, WHEEL_DLL,
+};
 use crate::config::Picture;
 use rea_launcher::wheel::dinput;
 use rea_launcher_win32::reg::Value;
@@ -121,22 +123,22 @@ pub fn plan_on(
     if advanced_particles {
         args.push(FORCE_HT_ARG);
     }
-    // The close hook always: the runtime's cmr5.exe imports it, so it
-    // must sit next to it.
+    // The close hook and the wheel layer always: the runtime's cmr5.exe
+    // imports them, so they must sit next to it.
     let (installed, taken_out, dxvk_conf) = if wine {
         (
-            vec![DXVK_DLL, CLOSE_HOOK_DLL],
+            vec![DXVK_DLL, CLOSE_HOOK_DLL, WHEEL_DLL],
             Vec::new(),
             Some(components::dxvk_conf(picture)),
         )
     } else {
-        (vec![CLOSE_HOOK_DLL], vec![DXVK_DLL], None)
+        (vec![CLOSE_HOOK_DLL, WHEEL_DLL], vec![DXVK_DLL], None)
     };
     Plan {
         registry: registry::writes(runtime, saves, picture.size()),
         args,
         installed,
-        exe_imports: vec![CLOSE_HOOK_DLL],
+        exe_imports: vec![CLOSE_HOOK_DLL, WHEEL_DLL],
         taken_out,
         files: vec![(DXVK_CONF, dxvk_conf)],
         app_dll_overrides: if wine {
@@ -244,7 +246,7 @@ mod tests {
         );
         assert_eq!(plan.args, [WIDESCREEN_ARG]);
         assert_eq!(plan.registry.len(), 4);
-        assert_eq!(plan.installed, [DXVK_DLL, CLOSE_HOOK_DLL]);
+        assert_eq!(plan.installed, [DXVK_DLL, CLOSE_HOOK_DLL, WHEEL_DLL]);
         assert_eq!(plan.app_dll_overrides, ["d3d9"]);
         assert!(!plan.prefer_fast_gpu);
     }
@@ -261,7 +263,11 @@ mod tests {
         assert!(plan.args.is_empty());
         assert_eq!(plan.registry.len(), 2, "only the two paths");
         assert_eq!(plan.taken_out, [DXVK_DLL]);
-        assert_eq!(plan.installed, [CLOSE_HOOK_DLL], "next to cmr5.exe");
+        assert_eq!(
+            plan.installed,
+            [CLOSE_HOOK_DLL, WHEEL_DLL],
+            "next to cmr5.exe"
+        );
         assert_eq!(plan.files, [(DXVK_CONF, None)]);
         assert!(plan.app_dll_overrides.is_empty());
         assert!(plan.prefer_fast_gpu);
@@ -363,7 +369,7 @@ mod tests {
                 Path::new("/s"),
                 wine,
             );
-            assert_eq!(plan.exe_imports, [CLOSE_HOOK_DLL]);
+            assert_eq!(plan.exe_imports, [CLOSE_HOOK_DLL, WHEEL_DLL]);
             assert!(plan.installed.contains(&CLOSE_HOOK_DLL), "wine: {wine}");
             assert!(plan.env.contains(&(rea_close_hook::ENV, CLOSE_HOOK_CONFIG)));
             assert!(plan.env.contains(&(rea_close_hook::ATTACH_ENV, "1")));
@@ -374,6 +380,7 @@ mod tests {
             );
         }
         assert_eq!(CLOSE_HOOK_DLL, rea_close_hook::DLL);
+        assert_eq!(WHEEL_DLL, crate::wheel::DLL);
     }
 
     /// `FORCEHT` unlocks the game's Advanced particles, which it otherwise

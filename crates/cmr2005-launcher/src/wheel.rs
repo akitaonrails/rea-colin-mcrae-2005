@@ -6,19 +6,21 @@
 //! It reads `rea_wheel.ini` next to it in the runtime, made at each start
 //! from the `wheel*` options (`launcher.cfg` and the flags) and the pedal
 //! calibration the Wheel tab keeps in its own `rea_wheel.ini` beside
-//! `launcher.cfg` ([`runtime_ini`]). The launcher decides before the start whether the
-//! wheel will be shown ([`shown`], the rule the layer applies too) and
-//! tells the layer through [`MODE_ENV`], so the game's `OPTIONS` is seeded
-//! for the same devices the game will see (`crate::controls`).
+//! `launcher.cfg` ([`runtime_ini`]). The launcher decides before the
+//! start whether the wheel will be shown ([`shown`], the rule the layer
+//! applies too) and tells the layer through [`MODE_ENV`], so the game's
+//! `OPTIONS` is seeded for the same devices the game will see
+//! (`crate::controls`).
 
 use rea_launcher::wheel::dinput::{HEADER, Mode, Profile, Setup};
 use rea_launcher::wheel::rig::{self, Device};
 
-/// The layer's DLL, next to the runtime's `cmr5.exe`, which imports it.
-pub const DLL: &str = "rea_dinput.dll";
+/// The layer's DLL, next to the runtime's `cmr5.exe`, which imports it
+/// (`rea_dinput::import_into`).
+pub const DLL: &str = rea_dinput::DLL;
 
 /// The layer's on/off for this start, in the game's environment.
-pub const MODE_ENV: &str = "REA_WHEEL_MODE";
+pub const MODE_ENV: &str = rea_dinput::MODE_ENV;
 
 /// Whether the game is shown the virtual wheel: `On` and `Off` as set;
 /// `Auto` asks `attached` for the controllers plugged in now (only then:

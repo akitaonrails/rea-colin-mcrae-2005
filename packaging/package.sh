@@ -6,7 +6,9 @@
 # (rea-launcher-sdk docs/playbooks/ci-and-releases.md).
 #
 # Environment: REA_RELEASE_DIR holds CMR2005Launcher.exe (CI sets it; default
-# target/i686-pc-windows-gnu/release); REA_CACHE caches pinned downloads.
+# target/i686-pc-windows-gnu/release); REA_DLL_DIR holds the close hook and
+# wheel layer DLLs (packaging/build-dlls.sh; default
+# target/i686-pc-windows-gnu/dll); REA_CACHE caches pinned downloads.
 # Everything the folder holds must be listed in packaging/package.allow.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -38,7 +40,7 @@ mkdir -p "$pkg/components" "$pkg/licenses/innoextract"
 if [ "${REA_STANDIN_COMPONENTS:-}" = 1 ]; then
   # packaging/tests: stand-ins, no network and no build.
   for f in components/d3d9.dll components/innoextract.exe components/rea_close_hook.dll \
-    licenses/innoextract/innoextract.LICENSE.txt licenses/innoextract/Boost.LICENSE_1_0.txt \
+    components/rea_dinput.dll licenses/innoextract/innoextract.LICENSE.txt licenses/innoextract/Boost.LICENSE_1_0.txt \
     licenses/innoextract/liblzma.COPYING.txt licenses/innoextract/libstdc++.COPYING3.txt \
     licenses/innoextract/libstdc++.COPYING.RUNTIME.txt; do
     printf 'stand-in\n' > "$pkg/$f"
@@ -61,14 +63,13 @@ else
   # and (below, --payload components) the AppImage.
   innoextract_bundle "$pkg" "$work"
 
-  # The SDK's close hook, built from the pinned SDK (a dependency, not a
-  # workspace member; CI builds it next to the launcher).
-  hook=$release/rea_close_hook.dll
-  if [ ! -f "$hook" ]; then
-    (cd "$ROOT" && cargo build --release --locked --target i686-pc-windows-gnu -p rea-launcher-close-hook)
-    hook=$ROOT/target/i686-pc-windows-gnu/release/rea_close_hook.dll
-  fi
-  cp "$hook" "$pkg/components/rea_close_hook.dll"
+  # The SDK's close hook and wheel layer, built from the pinned SDK by
+  # packaging/build-dlls.sh (CI's extra-build) into REA_DLL_DIR.
+  dlls=${REA_DLL_DIR:-$ROOT/target/i686-pc-windows-gnu/dll}
+  for dll in rea_close_hook.dll rea_dinput.dll; do
+    [ -f "$dlls/$dll" ] || sh "$ROOT/packaging/build-dlls.sh"
+    cp "$dlls/$dll" "$pkg/components/$dll"
+  done
 fi
 
 (cd "$dist" && rm -f "$name.zip" && zip -qr "$name.zip" "$name")

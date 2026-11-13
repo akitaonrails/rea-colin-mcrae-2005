@@ -17,6 +17,14 @@ rea-launcher.workspace = true
 # Its Windows parts are cfg(windows); the console decision is portable.
 rea-launcher-win32.workspace = true
 rea-launcher-close-hook.workspace = true
+rea-launcher-dinput.workspace = true
+
+[features]
+# Only for building the shipped DLLs (packaging/build-dlls.sh, with --lib):
+# turns on the close hook's and the wheel layer's `dll` feature (DllMain and
+# the exports). Never for the launcher exe, which links both libraries and
+# can hold neither DllMain.
+layer-dlls = ["rea-launcher-close-hook/dll", "rea-launcher-dinput/dll"]
 
 [build-dependencies]
 rea-launcher-build.workspace = true
