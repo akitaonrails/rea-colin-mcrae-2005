@@ -221,11 +221,16 @@ again.
 - **Off:** set **Wheel support** to Off (or `--wheel off`) and the game
   sees your controllers as they are.
 
-Limits: the game reads 256 steps of steering whatever the wheel; the
-wheel and pedals are picked when the game starts (a replug of the same
-wheel is fine, a new wheel needs a restart); one wheel, for player 1.
-Real wheels have not been tried yet (see
-[docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md)).
+Limits: the game reads 256 steps of steering whatever the wheel; with
+Auto the wheel must be plugged in when you press Play (a replug of the
+same wheel is fine); one wheel, for player 1.
+
+**Not tried on a real wheel yet.** Everything above was checked with the
+real game and a stand-in wheel (see
+[docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md)). If your wheel misbehaves,
+set `wheel_log = on` in `launcher.cfg`, play once, and
+[open an issue](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=bug-report.yml) with your wheel and pedals' models, `launcher.log` and
+`runtime\rea_wheel.log`.
 
 ## The game's own settings
 

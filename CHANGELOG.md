@@ -27,11 +27,15 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
   you set it up), and a launcher that never shows the wheel never changes
   `OPTIONS`. The game writes `OPTIONS` when it first saves: until then
   there is nothing to set up, and the wheel is set up from the next start.
+- **Not tried on a real wheel yet:** checked with the real game under Wine
+  and a stand-in wheel (the game binds "rea wheel", keeps its controls,
+  and gets its pad back without it). If your wheel misbehaves, set
+  `wheel_log = on`, play once and [open an issue](https://github.com/akitaonrails/rea-colin-mcrae-2005/issues/new?template=bug-report.yml) with your wheel's
+  model, `launcher.log` and `runtime\rea_wheel.log`.
 
 ### Changed
 
-- Built on rea-launcher-sdk v0.8.2, with the unreleased wheel work of
-  v0.9.0 (to be pinned to v0.9.0 before release).
+- Built on rea-launcher-sdk v0.9.0 (from v0.7.0).
 - The package holds `components/rea_dinput.dll`, and the runtime's
   `cmr5.exe` imports it after `rea_close_hook.dll`. With wheel support
   Off, or Auto without a wheel, it gives the game its DirectInput
