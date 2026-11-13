@@ -180,6 +180,66 @@ cause, the one the player must change). Seeding `SELECTION` before the
 first start would need the adapter's D3D9 ids, which the SDK does not
 expose (proposal in the 2026-11-09 report).
 
+## Wheels: the virtual wheel and `SG/OPTIONS` (2026-11-13)
+
+Static study of GOG `cmr5.exe` 1.1 (`a7ea2d33…`) for the SDK's wheel work
+(rea-launcher-sdk `.work/cmr-wheels-plan.md`, seed study
+`seed-cmr2005.md`); V = seen in the binary, U = not verified.
+
+- **Input (V):** `EnumDevices(DI8DEVCLASS_GAMECTRL, ATTACHEDONLY)` opens
+  up to 16 controllers in DirectInput's order, `c_dfDIJoystick2`,
+  exclusive and foreground; every axis is set to `DIPROP_RANGE` 0..255
+  by object ID (`0x584e63`), so steering has 256 steps. A device whose
+  `dwDevType` is DRIVING or FLIGHT is the game's wheel type (type 2,
+  `0x46dfe0`), the only one with separate pedals (`0x46e93e`).
+  Force feedback is native (Spring, Damper, a Sine, Constant force on X
+  and Y; `DIPROP_AUTOCENTER` toggled). No steering lock anywhere.
+- **No community wheel fix** exists for this game (PCGamingWiki, the
+  forums); the PCGW "Force Feedback Restore Module" is a Xidi setup for
+  pad rumble only.
+- **`SG/OPTIONS` has no checksum (V).** Saved by `0x401140` (the
+  `0xe34e8` bytes at `0x8f9030`); the CRC-32 at `0x4067e0` covers a
+  separate copy and is not written. Loading needs the exact size and the
+  version byte. The 8-byte trailer is a random profile id (`+0xe34e0`)
+  and the version `0x1b` with three flag bytes (`+0xe34e4`): a version
+  mismatch makes the game delete the other save slots, so the launcher
+  never writes it.
+- **Controller records (V):** 18 per player at `0x60 + (player·18 +
+  slot)·0x261c`; slot 0 keyboard, 1 mouse, 2–17 the controllers in
+  `EnumDevices` order. Player 1's slot is the u32 at `0xab888`. A record
+  keeps its device's product and vendor ids at `+0x74`/`+0x78`; when they
+  don't match the device in its slot (`0x406a00`) the game resets the
+  record's bindings and ids to that device's defaults (`0x46f0d0`) but
+  **keeps byte 0, the calibration tables and the autocentre word
+  `+0x253c`**.
+- **Controls (V):** buttons 0–31, the hat 32/33, then the axes in
+  `EnumObjects` order: the virtual wheel's X = 34, Y = 35, Z = 36,
+  Rz = 37. Bindings at `+0x04..+0x70` (steering `+0x24`/`+0x28`,
+  accelerate `+0x5c`, brake `+0x60`). Byte 0: bit 1 force feedback, bits
+  2–4 strength 0–4 (`min(1, (s+1)·0.2)`, `0x4afc77`); byte 1: digital
+  steering, digital pedals, inverted pedals.
+- **Calibration (V, `0x5842e0`):** eight i32 per mapper entry at
+  `+0x7c + entry·0x20` (offset, deadzone edges, saturation, 100, invert);
+  steering is entry 7, accelerate 9, brake 10; applied only when the ids
+  match. The launcher's seed: entry 7 `[0x7fff,0,0,-0x7fff,0x7fff,0,100,0]`
+  (raw 0/127/128/255 → −32767/−128/129/32767, no deadzone), entries 9
+  and 10 `[0,0,0,0,0xffff,0,100,0]` (released at the axis minimum).
+- **The seed** (`controls::seed`): the game's own wheel defaults
+  (`0x46ebd0`) with steering on X and the pedals on Z and Rz, byte 0
+  `0x12` (force feedback on at full; the layer applies the player's
+  strength), byte 1 0, autocentre off, ids 5245/1209, player 1 on slot 2.
+  On the owner's `OPTIONS` it changes the same 48 bytes as the research's
+  `seed.py`, byte for byte (`controls::tests::a_real_options_file_round_trips`
+  with `CMR2005_OPTIONS`/`CMR2005_OPTIONS_SEEDED`).
+- **Why the stash:** a start without the wheel puts the pad in slot 2; the
+  game's reset would keep the seed's calibration, byte 0 and autocentre
+  and apply them to the pad. The launcher puts the record it displaced
+  back instead, and keeps the wheel's record (with the player's in-game
+  changes) for the next wheel start (`controls`, `wheel-records`).
+- **No `OPTIONS` before the first save (V):** a new player has no file,
+  and building one is unverified (U), so the launcher seeds from the
+  next start.
+
 ## Community work
 
 | Project | What it does | Licence | Maintained | Needs | Decision |
@@ -235,7 +295,7 @@ cockpit and replay cameras.
 | Multi-core affinity | the game imports affinity APIs; to check |
 | Alt+F4, window close | **ignored by the game** (runs r13–r14): the close hook is needed |
 | Focus loss | to check |
-| DirectInput controllers | to check (Xidi) |
+| DirectInput controllers | pads: the game's own Controllers menu; wheels: the SDK's in-game layer (`rea_dinput.dll`, see "Wheels") |
 | Service Area crash (Wine bug 22232) | to check |
 
 ## Installing the game for players

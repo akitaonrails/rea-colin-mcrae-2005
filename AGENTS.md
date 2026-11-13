@@ -33,7 +33,8 @@ game in a test" (under "Testing").
 | `crates/cmr2005-launcher/src/config.rs` | The option table: `launcher.cfg`, flags, `--help`, template, looks |
 | `crates/cmr2005-launcher/src/cli.rs` | Modes (`--settings`, `--no-window`, `--check`, `--help`), exit codes |
 | `crates/cmr2005-launcher/src/form.rs`, `ui.rs`, `palette.rs` | The settings window and its headless tests |
-| `crates/cmr2005-launcher/src/runtime.rs` | The runtime copy's `Policy` |
+| `crates/cmr2005-launcher/src/runtime.rs` | The runtime copy's `Policy`, `cmr5.exe` with the close hook and wheel layer imports |
+| `crates/cmr2005-launcher/src/wheel.rs`, `controls.rs` | The wheel layer on a start (shown or not, its `rea_wheel.ini`); the virtual wheel's record in `SG\OPTIONS` (seed, stash, put back) |
 | `crates/cmr2005-launcher/src/main.rs` | Windows wiring: console, window, `launcher.log`, the game's process |
 | `linux/cmr2005-play`, `linux/tests/` | The Linux helper (sources `sdk/rea-play.sh`) and its tests |
 | `packaging/` | Pins, allowlist, package script, AppImage desktop entry and icon |
@@ -51,6 +52,7 @@ cargo deny check
 for t in linux/tests/*.sh packaging/tests/*.sh; do sh "$t"; done
 ../rea-launcher-sdk/scripts/sdk-sync --check .
 cargo build --release --locked --target i686-pc-windows-gnu
+sh packaging/build-dlls.sh                     # rea_close_hook.dll, rea_dinput.dll (profile dll)
 sdk/scripts/wine-test --locked --workspace     # Windows-target tests under Wine, headless
 ```
 
@@ -92,13 +94,25 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   restores them after the game exits (`registry::after_run`).
 - **`FORCEHT`** unlocks the game's Advanced particles on non-HT CPUs (AMD,
   modern Intel); passed unless `advanced_particles = off`.
+- **Wheels:** the runtime's `cmr5.exe` also imports the SDK's
+  `rea_dinput.dll` (after the close hook), which shows the game one
+  virtual wheel. The launcher decides before each start
+  (`wheel::shown`), passes `REA_WHEEL_MODE`, writes the runtime's
+  `rea_wheel.ini` from the `wheel*` options and the calibration beside
+  `launcher.cfg`, and seeds player 1's slot 2 of `OPTIONS` for the
+  virtual wheel (no checksum; never the 8-byte trailer), putting the
+  displaced record back on a start without it (`controls`,
+  `wheel-records`). Both DLLs are built by `packaging/build-dlls.sh`
+  (`--profile dll`, which unwinds, and the `layer-dlls` feature; the
+  launcher links both crates with `default-features = false`).
+  Docs/RESEARCH.md "Wheels", RUNTIME_NOTES 2026-11-13.
 - **Files the game writes:** `SG\OPTIONS` and saves under `SAVEGAME_PATH`
   (`BESTTIMES_GHOSTS`, `CAREER_SLOT_*`, `CHAMPIONSHIP_SLOT_*`), plus the
   registry values above (in the HKCU key, through the redirect).
 - **Community components used:** none yet; Xidi planned (see `docs/RESEARCH.md`).
 - **Patches:** none to the game's code; the startup crash needs no patch.
   The runtime copy's `cmr5.exe` imports `rea_close_hook.dll` (SDK v0.4.3,
-  `rea_close_hook::import_into`), rebuilt from the player's bytes on every
+  `rea_close_hook::import_into`) and `rea_dinput.dll`, rebuilt from the player's bytes on every
   start; the import is required (it carries the registry redirect), so an
   exe that can't take it stops Play and `--check`; the launcher never hooks the running game (antivirus).
 - **Owner decisions (2026-11-02):** id `cmr2005`; accept an installed
@@ -112,5 +126,7 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
 - **Known problems and their status:** startup crash fixed (verified to the
   menus, headless). Verified headless: intro videos, a stage, saves,
   16:9 widescreen, DXVK, every way of quitting under `cmr2005-play`, the
-  settings window under Wine and play-time error dialogs. Sound, driving
-  and controllers are not verified yet (`docs/RUNTIME_NOTES.md`).
+  settings window under Wine and play-time error dialogs, the wheel layer
+  with the virtual wheel bound and the seed kept (no real wheel). Sound,
+  driving with a real wheel and pads are not verified yet
+  (`docs/RUNTIME_NOTES.md`).

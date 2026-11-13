@@ -5,6 +5,38 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Added
+
+- **Wheels.** The launcher's copy of the game loads the SDK's wheel layer
+  (`rea_dinput.dll`), which shows the game one wheel, "rea wheel", made
+  from your wheel and your pedals (also pedals on their own USB): the
+  steering after a steering lock you choose (540° by default), throttle
+  and brake on their own axes, the game's force feedback at your
+  strength. A new **Wheel** tab in the settings window sets it up: wheel
+  support (Auto, On, Off), which wheel and pedals, a live check of what
+  the game gets, steering lock, deadzone and curve, pedal inversion and
+  calibration, force-feedback strength, direction and a test. Every
+  setting is also a `launcher.cfg` key and a flag (`--wheel`,
+  `--wheel-lock`, `--wheel-ffb`, …); the pedal calibration is kept in
+  `rea_wheel.ini` beside `launcher.cfg`.
+- When the game will see the wheel, the launcher sets it up in the game's
+  own controls (`saves\OPTIONS`): player 1 drives with "rea wheel",
+  steering, accelerator and brake bound, force feedback on, autocentre
+  off. Your later changes to those controls in the game are kept. A start
+  without the wheel puts back the controller the game had (your pad, as
+  you set it up), and a launcher that never shows the wheel never changes
+  `OPTIONS`. The game writes `OPTIONS` when it first saves: until then
+  there is nothing to set up, and the wheel is set up from the next start.
+
+### Changed
+
+- Built on rea-launcher-sdk v0.8.2, with the unreleased wheel work of
+  v0.9.0 (to be pinned to v0.9.0 before release).
+- The package holds `components/rea_dinput.dll`, and the runtime's
+  `cmr5.exe` imports it after `rea_close_hook.dll`. With wheel support
+  Off, or Auto without a wheel, it gives the game its DirectInput
+  untouched.
+
 ## [0.4.2] - 2026-11-10
 
 ### Fixed

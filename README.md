@@ -142,7 +142,8 @@ resolution you pick in the game, choose the **Original** look.
 ## The settings window
 
 **Play** holds the game folder and the looks. **Picture** holds the
-resolution, the frame-rate cap, VSync and Advanced particles. Changing one
+resolution, the frame-rate cap, VSync and Advanced particles. **Wheel**
+sets up a wheel and pedals (see **Wheels**). Changing one
 of the first three by hand leaves the look cards unselected (your own mix);
 Advanced particles is not part of a look.
 
@@ -170,6 +171,61 @@ pad, then the buttons and the steering and pedal axes. A gamepad
 was set up this way and played a full stage on Linux. The same screen
 calibrates the axes (**deadzone** and **saturation**) and holds the
 **Vibration** and **Vibration Strength** settings.
+
+## Wheels
+
+The game reads one controller per player and knows nothing of today's
+wheels: a 900–1080° wheel turns the car fully at a few degrees, and
+pedals on their own USB device can't be used beside the wheel. The
+launcher's copy of the game therefore loads `rea_dinput.dll`, which shows
+the game **one wheel, "rea wheel"**, made from your wheel and your pedals:
+
+- the steering after the **steering lock** you pick, so the car turns as
+  far as your hands do (540° by default, a rally lock);
+- throttle and brake on axes of their own, from pedals in the wheel base
+  or on their own USB (Fanatec, Heusinkveld, Simucube…);
+- the wheel's buttons, then the pedals', and the wheel's hat;
+- force feedback from the game, sent to your wheel at your strength, and
+  back after the wheel was replugged.
+
+**Setup:** plug the wheel and pedals in, open the launcher's **Wheel** tab
+and check the **Live check**: turn the wheel, press each pedal. If a pedal
+reads wrong, press **Calibrate pedals** and follow the steps. Then Play.
+With **Wheel support** on Auto, the launcher sets the game's controls for
+"rea wheel" when a wheel is plugged in as you press Play: player 1 drives
+with it, steering on X, accelerate and brake on their own pedals, force
+feedback on, autocentre off. Your own changes to those controls in the
+game's **Options → Controllers** are kept from then on. Started without
+the wheel, the game gets back the controller it had before (your pad,
+as you set it up), and the wheel's settings come back with the wheel.
+
+**There is nothing to set up before the game first saves.** The game
+writes its settings file (`saves\OPTIONS`) when it saves for the first
+time; until then the launcher has nothing to change, and the wheel is set
+up in the game's controls from the next start. On that first start, bind
+"rea wheel" in **Options → Controllers** yourself, or just start the game
+again.
+
+- **Steering lock:** set it in the Wheel tab, and leave your wheel's own
+  software at its full rotation (900° or more); the tab's lock does the
+  rest. Setting both makes the lock smaller than you chose.
+- **Force feedback:** the tab's **Strength** scales what the game sends.
+  Start lower on a direct-drive base. **Test force feedback** pushes the
+  wheel left, then right.
+- **Fanatec pedals on USB** (ClubSport, CSL): they show up as their own
+  device; the tab finds them, or pick them under **Pedals**. Pedals
+  plugged into the base work as they are.
+- **Wheels in Xbox mode** (G920/G923 Xbox, T248X…): switch the wheel to
+  its PC mode, or turn its "gamepad" mode off in the vendor software; in
+  Xbox mode it looks like a pad and is not used as a wheel.
+- **Off:** set **Wheel support** to Off (or `--wheel off`) and the game
+  sees your controllers as they are.
+
+Limits: the game reads 256 steps of steering whatever the wheel; the
+wheel and pedals are picked when the game starts (a replug of the same
+wheel is fine, a new wheel needs a restart); one wheel, for player 1.
+Real wheels have not been tried yet (see
+[docs/RUNTIME_NOTES.md](docs/RUNTIME_NOTES.md)).
 
 ## The game's own settings
 
@@ -253,6 +309,9 @@ with 5.
 | The game unpacked from GOG's installer | `%LOCALAPPDATA%\CMR2005Launcher\game\` | `…/CMR2005Launcher/game/` |
 | Wine prefix | — | `~/.local/share/cmr2005-launcher/prefix` |
 | `cmr2005-play`'s logs and lock | — | `~/.config/cmr2005-launcher` |
+| The wheel's pedal calibration (`rea_wheel.ini`) | beside `launcher.cfg` | beside `launcher.cfg` |
+| The game's wheel and pad controls the launcher keeps aside (`wheel-records`) | `%LOCALAPPDATA%\CMR2005Launcher\` | `…/CMR2005Launcher/` |
+| The wheel layer's settings and log (`rea_wheel.ini`, `rea_wheel.log` with `wheel_log = on`) | `…\CMR2005Launcher\runtime\` | `…/CMR2005Launcher/runtime/` |
 
 A `launcher.cfg` next to `CMR2005Launcher.exe` is used instead (a portable
 install). Under Proton everything is inside Steam's

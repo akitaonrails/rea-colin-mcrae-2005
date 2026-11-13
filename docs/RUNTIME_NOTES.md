@@ -29,6 +29,10 @@ Status: ✅ verified · ⚠️ partly (see notes) · ❌ fails · — not yet ch
 | `fps_limit` | ✅ value box 75 → `fps_limit = 75` → `dxvk.conf` `d3d9.maxFrameRate = 75` (v10, v11) | ✅ r15 (45 fps cap) | |
 | `vsync` | ✅ switch off → `vsync = off` → `d3d9.presentInterval = 0` (v10, v11) | ✅ r16 (on: 59.9 fps) | |
 | `advanced_particles` | ✅ switch off → `advanced_particles = off` → no `FORCEHT` (ui e2e test); on → `FORCEHT` (v1–v3b) | ✅ m6/m7, v3b: without `FORCEHT` the game's Graphics menu shows "Advanced particles Off" greyed out on this AMD Ryzen; with it the row is selectable and On; a stage loads and runs (s1) | |
+| `wheel` | ✅ window chip → `wheel = on` → `REA_WHEEL_MODE=on`, `rea_wheel.ini` `mode = on` (ui e2e tests); the launcher's decision and the seed in `OPTIONS` (b1, d1) | ✅ b1: the game lists and binds "rea wheel"; d1: Auto without a wheel leaves the game its DirectInput | real wheel pending |
+| `wheel_lock`, `wheel_deadzone`, `wheel_curve`, `wheel_invert_*`, `wheel_device`, `wheel_pedals` | ✅ window control → key → the runtime's `rea_wheel.ini` (ui e2e tests, cli tests) | — | need a real wheel |
+| `wheel_ffb`, `wheel_ffb_invert` | ✅ window chip → key → `ffb_strength` (ui e2e tests) | ⚠️ c1: the game's four effects made on the fake wheel at 50 % | the force itself needs a real wheel |
+| `wheel_log` | ✅ `launcher.cfg` → `log = on` → `rea_wheel.log` next to the game (b1, c1) | ✅ | |
 | `game` | ✅ typed `Z:\…\extract\app` → `game = …`, "Found PC v1.1 (GOG)" (v12) | — | Browse… opens Wine's folder picker (v09) |
 
 ### Platforms
@@ -512,3 +516,40 @@ involved; a player of 0.4.0 keeps language and Graphics options).
   same code there (registry read through the same key as the writes).
 - Advanced particles while driving (dust, spray) and the snow visibility
   reported on GOG's forum for the Swedish stages.
+
+### 2026-11-13: the wheel layer with the real game (headless, no wheel)
+
+Release i686 build and the DLLs from `packaging/build-dlls.sh`
+(`--profile dll`, the `layer-dlls` feature; `objdump -p`: the close hook
+exports `DllMain`, `close_hook`, `rea_close_hook_attach`, the layer
+`DllMain`, `rea_dinput_load` and the test-only `rea_dinput_fake_*`; the
+launcher exe exports no `DllMain`), packaged with
+`packaging/package.sh --no-appimage`. Wine 11.21 and gamescope 3.17.0
+(`--backend headless`) in the `gaming` box, from `env -i`, a private
+PipeWire null sink, the throwaway prefix `.work/realgame/prefix-h1` (the
+game unpacked there from the owner's GOG installer). Harness
+`.work/realgame/bin/wheel.sh` (through `cmr2005-play --play`) and
+`bin/fake.sh` (the runtime's `cmr5.exe` started directly); processes found
+by exact name and our own session only. `tools/opts.py` reads player 1's
+controller fields from `OPTIONS` or from the game's copy at `0x8f9030`.
+Evidence in `.work/realgame/logs/{a1-off,b1-on,c1-fake,d1-auto-altf4}`.
+Every run: Return through the menus into a Time Trial stage, then a close.
+
+| Run | What | Result |
+|---|---|---|
+| a1 | `wheel = off`, no `OPTIONS` yet | `rea_close_hook.dll` and `rea_dinput.dll` both mapped into `cmr5.exe`; the launcher logged "no OPTIONS yet … controls not seeded"; the stage ran; the game wrote `OPTIONS` (slot 2 empty: no controller); `WM_DELETE_WINDOW` ended everything in 3.6 s |
+| b1 | `wheel = on`, `wheel_log = on` | launcher: "the virtual wheel seeded in slot 2 for player 1", `wheel-records` written. Layer log: mode on (`REA_WHEEL_MODE`), `CreateDevice` of the virtual wheel, `c_dfDIJoystick2`, `DIPROP_RANGE` on X, Y, Z, Rz by object ID, `DIPROP_AUTOCENTER`, then Spring, Damper, Sine and Constant effects. In the stage the game's own copy of `OPTIONS` still held the seed: ids 5245/1209, steering 34/34, accelerate 36, brake 37, calibration entries 7/9, autocentre off, player 1 on slot 2, byte 0 `0x13` (bit 0 set by the game at load); the re-saved file the same; the trailer unchanged. Closed in 3.6 s; "the virtual wheel's controls kept for the next start" |
+| c1 | the same runtime started directly, `fake = wheel` appended to its `rea_wheel.ini` by hand (the launcher's next start wrote the file again without it) | the layer found the fake CSL DD, hid it from the game, took it exclusive in the background, and made the game's four effects on it at the 50 % strength (saturation 10000 → 5000); the seeded record held in memory as in b1; closed in 1 s |
+| d1 | `wheel = auto`, no wheel attached, Alt+F4 held while the mouse moves | launcher: "the game doesn't see the virtual wheel", "no wheel this time; the controller record … back in slot 2"; layer: "off: the game gets its DirectInput untouched"; `OPTIONS` afterwards **byte for byte the file a1 left** (the seed fully undone); Alt+F4 ended everything in 3.95 s |
+
+gamescope 3.17.0 still segfaults on exit (the helper's exit 139), as
+before. Not seen: the slot-type word at `0xab848` the seed study expected
+to read 2 for the wheel read 0 in the game's memory; the game kept the
+record all the same, so the classification it stands for was not needed.
+
+**Needs a real wheel** (phase 3 of the SDK's wheel plan): the force's
+direction and feel at a given strength, the game's effect updates while
+driving (the car stood still here, so no `SetParameters` were seen), the
+autocentre value the game sets in a stage, steering and pedals reaching
+the car, separate USB pedals, the steering lock's feel, a replug mid-stage,
+and Windows 10/11 with the vendors' drivers.
