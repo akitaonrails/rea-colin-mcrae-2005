@@ -16,10 +16,10 @@
 //!
 //! - **Wheel shown** ([`prepare`] with `wheel`): a record that is already
 //!   the virtual wheel's, and one the launcher put there, is left as it is
-//!   (the player's in-game changes). Otherwise the record there is put
-//!   aside in the [`Stash`] under its ids, and the virtual wheel's stashed
-//!   record goes in, or the [`seed`] the first time; player 1 then uses
-//!   slot 2.
+//!   (the player's in-game changes). Otherwise the record there (a pad's,
+//!   with its ids) and player 1's slot are put aside in the [`Stash`], and
+//!   the virtual wheel's stashed record goes in, or the [`seed`] the first
+//!   time; player 1 then uses slot 2.
 //! - **No wheel**: when slot 2 still holds the virtual wheel's record, it
 //!   is stashed and the record it displaced goes back (the game's reset
 //!   would keep the wheel's calibration and apply it to the pad). Any
@@ -32,6 +32,7 @@
 //! seeded until the next start.
 
 use std::io;
+use std::ops::Range;
 use std::path::Path;
 
 use rea_launcher::wheel::dinput::VIRTUAL;
@@ -276,44 +277,56 @@ impl Change {
     }
 }
 
+/// Player 1's slot 2 in `OPTIONS`.
+fn wheel_slot() -> Range<usize> {
+    record_at(WHEEL_SLOT)..record_at(WHEEL_SLOT) + RECORD
+}
+
 /// Changes `options` (the whole file) for a start with the virtual wheel
 /// shown or not, keeping aside in `stash` what it replaces.
 pub fn before_run(options: &mut [u8], stash: &mut Stash, wheel: bool) -> Change {
     if options.len() != SIZE {
         return Change::NoOptions;
     }
-    let slot = record_at(WHEEL_SLOT)..record_at(WHEEL_SLOT) + RECORD;
-    let ours = ids(&options[slot.clone()]) == VIRTUAL_IDS;
-    if wheel {
-        if ours && stash.wheel.is_some() {
-            return Change::Untouched;
+    let ours = ids(&options[wheel_slot()]) == VIRTUAL_IDS;
+    match (wheel, ours) {
+        (true, true) if stash.wheel.is_some() => Change::Untouched,
+        (true, _) => show_wheel(options, stash),
+        (false, true) => put_back(options, stash),
+        (false, false) => Change::Untouched,
+    }
+}
+
+/// Slot 2's record aside, the virtual wheel's in (stashed, else seeded),
+/// player 1 on it.
+fn show_wheel(options: &mut [u8], stash: &mut Stash) -> Change {
+    stash.displaced = Some(Displaced {
+        selected: u32_at(options, SELECTED),
+        record: options[wheel_slot()].to_vec(),
+    });
+    let change = match &stash.wheel {
+        Some(record) => {
+            options[wheel_slot()].copy_from_slice(record);
+            Change::Restored
         }
-        stash.displaced = Some(Displaced {
-            selected: u32_at(options, SELECTED),
-            record: options[slot.clone()].to_vec(),
-        });
-        let change = match &stash.wheel {
-            Some(record) => {
-                options[slot].copy_from_slice(record);
-                Change::Restored
-            }
-            None => {
-                seed(&mut options[slot.clone()]);
-                stash.wheel = Some(options[slot].to_vec());
-                Change::Seeded
-            }
-        };
-        put_u32(options, SELECTED, WHEEL_SLOT);
-        return change;
-    }
-    if !ours {
-        return Change::Untouched;
-    }
+        None => {
+            seed(&mut options[wheel_slot()]);
+            stash.wheel = Some(options[wheel_slot()].to_vec());
+            Change::Seeded
+        }
+    };
+    put_u32(options, SELECTED, WHEEL_SLOT);
+    change
+}
+
+/// The virtual wheel's record aside, the displaced one back, and player
+/// 1's slot unless the player chose another in the game.
+fn put_back(options: &mut [u8], stash: &mut Stash) -> Change {
     let Some(displaced) = stash.displaced.take() else {
         return Change::Untouched;
     };
-    stash.wheel = Some(options[slot.clone()].to_vec());
-    options[slot].copy_from_slice(&displaced.record);
+    stash.wheel = Some(options[wheel_slot()].to_vec());
+    options[wheel_slot()].copy_from_slice(&displaced.record);
     if u32_at(options, SELECTED) == WHEEL_SLOT {
         put_u32(options, SELECTED, displaced.selected);
     }
@@ -326,7 +339,7 @@ pub fn after_run(options: &[u8], stash: &mut Stash) -> bool {
     if options.len() != SIZE || stash.wheel.is_none() {
         return false;
     }
-    let record = &options[record_at(WHEEL_SLOT)..record_at(WHEEL_SLOT) + RECORD];
+    let record = &options[wheel_slot()];
     if ids(record) != VIRTUAL_IDS {
         return false;
     }
@@ -403,7 +416,7 @@ mod tests {
     }
 
     fn record(options: &[u8]) -> &[u8] {
-        &options[record_at(WHEEL_SLOT)..record_at(WHEEL_SLOT) + RECORD]
+        &options[wheel_slot()]
     }
 
     fn word(options: &[u8], at: usize) -> i32 {
@@ -447,7 +460,7 @@ mod tests {
         let before = options();
         let mut after = before.clone();
         before_run(&mut after, &mut Stash::default(), true);
-        let slot = record_at(WHEEL_SLOT)..record_at(WHEEL_SLOT) + RECORD;
+        let slot = wheel_slot();
         for at in changed(&before, &after) {
             assert!(
                 slot.contains(&at) || (SELECTED..SELECTED + 4).contains(&at),
