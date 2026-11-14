@@ -14,3 +14,4 @@
 
 dxvk doitsujin/dxvk dxvk-
 innoextract dscharrer/innoextract innoextract-1.9-windows.zip
+xidi samuelgr/Xidi Xidi-v

@@ -16,3 +16,19 @@ dxvk-d3d9 - 265888c31ca78dffa290c39cb7e50bfb02762590e41927906e46fb32f01497fa
 # innoextract.exe unpacks GOG's installer, and its license/ folder ships.
 innoextract https://github.com/dscharrer/innoextract/releases/download/1.9/innoextract-1.9-windows.zip 6989342c9b026a00a72a38f23b62a8e6a22cc5de69805cf47d68ac2fec993065 https://constexpr.org/innoextract/files/innoextract-1.9-windows.zip mirror
 innoextract-exe - 946bd06d8b3722a791fea4d84f496139eef6faef61640924cb72f5f1998a68e1
+
+# Xidi 5.0.0 (BSD-3-Clause): Win32/dinput8.dll and the Win32/Xidi.32.dll it
+# loads, with the gamepad on; LICENSE, README.md and ThirdParty/* ship in
+# licenses/Xidi/.
+xidi https://github.com/samuelgr/Xidi/releases/download/v5.0.0/Xidi-v5.0.0.zip 41b6d23692d7e8043deef032ae5e619ee96aaef1586f58e4a541d4c15429b8cd mirror
+xidi-dinput8 - 7f2a1c7616515153d899b726c8ecf72d5fa81c27a9d14b5c394cdd2e09f325c5
+xidi-main - 771c991cfbf7d02dc58eb1a83ca39a68b1a029446cfef1f8875150de6aca38a8
+
+# Microsoft Visual C++ 2015-2022 Redistributable (x86), the build the CMR04
+# launcher ships: msvcp140.dll, msvcp140_atomic_wait.dll, concrt140.dll and
+# vcruntime140.dll for Xidi.32.dll, which imports all four (cabextract).
+vcredist https://download.visualstudio.microsoft.com/download/pr/990c720a-46ce-4dc7-87b9-c2eb615d34b9/0C09F2611660441084CE0DF425C51C11E147E6447963C3690F97E0B25C55ED64/VC_redist.x86.exe 0c09f2611660441084ce0df425c51c11e147e6447963c3690f97e0b25c55ed64 https://github.com/akitaonrails/rea-colin-mcrae-4/releases/download/thirdparty/VC_redist.x86.exe mirror
+vc-msvcp140 - 97e71a3c697fb1ab3af777db39009e4602525e8c3aff0837ecc7031cba188165
+vc-msvcp140_atomic_wait - c4a2bae74e008a5bb2445f9078c14df9dcb03267248dfa64e7d04cdc8af5208e
+vc-concrt140 - a2b04c69868b08a600518ebbad1661d38de4dd0e0a8e638c22d4641d410e50b1
+vc-vcruntime140 - a9d7732a3c3de09f0601a7fa2555093dcb49f08e2fc62a86091461f0f38393ed

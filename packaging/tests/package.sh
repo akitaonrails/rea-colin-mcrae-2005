@@ -41,6 +41,25 @@ if grep -q 'innoextract_bundle "$pkg"' "$ROOT/packaging/package.sh" \
 else
   fail "package.sh must call innoextract_bundle and pass --payload components to appimage-wine.sh"
 fi
+# Xidi (the gamepad option) and the VC++ runtime it imports ship in the zip
+# and the AppImage's payload, with Xidi's licences.
+for f in components/dinput8.dll components/Xidi.32.dll components/msvcp140.dll \
+  components/msvcp140_atomic_wait.dll components/concrt140.dll components/vcruntime140.dll \
+  licenses/Xidi/LICENSE licenses/Xidi/ThirdParty/Hookshot_LICENSE; do
+  if [ -f "$T/dist/CMR2005Launcher-v0.0.0/$f" ] \
+    && unzip -l "$T/dist/CMR2005Launcher-v0.0.0.zip" "CMR2005Launcher-v0.0.0/$f" > /dev/null 2>&1; then
+    ok "folder and zip hold $f"
+  else
+    fail "$f is not in the folder and the zip"
+  fi
+done
+if grep -q '^xidi-main - ' "$ROOT/packaging/third-party.txt" \
+  && grep -q '^vc-vcruntime140 - ' "$ROOT/packaging/third-party.txt" \
+  && grep -q 'pin_verify "$work/xidi/Xidi-v5.0.0/Win32/Xidi.32.dll"' "$ROOT/packaging/package.sh"; then
+  ok "Xidi and the VC++ runtime DLLs are checked against their pins"
+else
+  fail "package.sh must check Xidi's and the VC++ runtime DLLs against third-party.txt"
+fi
 if grep -q '^innoextract-exe - ' "$ROOT/packaging/third-party.txt" \
   && sh -c ". '$ROOT/sdk/packaging/innoextract.sh'; innoextract_pins" | grep -v '^#' \
   | while read -r line; do grep -qxF "$line" "$ROOT/packaging/third-party.txt" || exit 1; done; then

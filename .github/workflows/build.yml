@@ -25,6 +25,8 @@ jobs:
     with:
       rust-target: i686-pc-windows-gnu
       wine-tests: true
+      # cabextract: the VC++ runtime Xidi needs, out of Microsoft's installer.
+      apt-packages: gcc-mingw-w64-i686 lld zip unzip cabextract
       # The SDK's close hook and wheel layer DLLs (dependencies, not workspace
       # members), with their `dll` feature and the unwinding `dll` profile,
       # packaged into components/ by packaging/package.sh.

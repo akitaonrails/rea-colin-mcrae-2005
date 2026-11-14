@@ -9,6 +9,8 @@
 # target/i686-pc-windows-gnu/release); REA_DLL_DIR holds the close hook and
 # wheel layer DLLs (packaging/build-dlls.sh; default
 # target/i686-pc-windows-gnu/dll); REA_CACHE caches pinned downloads.
+# Needs unzip, zip and cabextract (the VC++ runtime Xidi needs comes out of
+# Microsoft's installer).
 # Everything the folder holds must be listed in packaging/package.allow.
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
@@ -36,7 +38,11 @@ cp "$ROOT"/packaging/licenses/* "$pkg/licenses/"
 # Third-party components from packaging/third-party.txt, each checked by
 # SHA-256 (the archive, then the one file taken out of it). innoextract
 # comes from the SDK's sdk/packaging/innoextract.sh.
-mkdir -p "$pkg/components" "$pkg/licenses/innoextract"
+# Xidi's DLLs and the VC++ runtime DLLs Xidi.32.dll imports.
+XIDI_FILES="dinput8.dll Xidi.32.dll"
+VC_DLLS="msvcp140 msvcp140_atomic_wait concrt140 vcruntime140"
+XIDI_LICENSES="LICENSE README.md ThirdParty/Boost_LICENSE ThirdParty/Hookshot_LICENSE ThirdParty/XstdBitSet_LICENSE"
+mkdir -p "$pkg/components" "$pkg/licenses/innoextract" "$pkg/licenses/Xidi/ThirdParty"
 if [ "${REA_STANDIN_COMPONENTS:-}" = 1 ]; then
   # packaging/tests: stand-ins, no network and no build.
   for f in components/d3d9.dll components/innoextract.exe components/rea_close_hook.dll \
@@ -45,6 +51,9 @@ if [ "${REA_STANDIN_COMPONENTS:-}" = 1 ]; then
     licenses/innoextract/libstdc++.COPYING.RUNTIME.txt; do
     printf 'stand-in\n' > "$pkg/$f"
   done
+  for f in $XIDI_FILES; do printf 'stand-in\n' > "$pkg/components/$f"; done
+  for d in $VC_DLLS; do printf 'stand-in\n' > "$pkg/components/$d.dll"; done
+  for f in $XIDI_LICENSES; do printf 'stand-in\n' > "$pkg/licenses/Xidi/$f"; done
 else
   . "$ROOT/sdk/packaging/pins.sh"
   . "$ROOT/sdk/packaging/innoextract.sh"
@@ -62,6 +71,32 @@ else
   # components/innoextract.exe and licenses/innoextract/*.txt, in the zip
   # and (below, --payload components) the AppImage.
   innoextract_bundle "$pkg" "$work"
+
+  # Xidi 5.0.0 (the gamepad option): the Win32 wrapper and main binary,
+  # each checked against its pin, and its licence texts.
+  xidi=$(pin_fetch xidi "$work")
+  mkdir -p "$work/xidi"
+  unzip -q "$xidi" 'Xidi-v5.0.0/Win32/dinput8.dll' 'Xidi-v5.0.0/Win32/Xidi.32.dll' \
+    'Xidi-v5.0.0/LICENSE' 'Xidi-v5.0.0/README.md' 'Xidi-v5.0.0/ThirdParty/*' -d "$work/xidi"
+  pin_verify "$work/xidi/Xidi-v5.0.0/Win32/dinput8.dll" "$(pin_sha xidi-dinput8)"
+  pin_verify "$work/xidi/Xidi-v5.0.0/Win32/Xidi.32.dll" "$(pin_sha xidi-main)"
+  for f in $XIDI_FILES; do cp "$work/xidi/Xidi-v5.0.0/Win32/$f" "$pkg/components/$f"; done
+  for f in $XIDI_LICENSES; do cp "$work/xidi/Xidi-v5.0.0/$f" "$pkg/licenses/Xidi/$f"; done
+
+  # The VC++ 2015-2022 runtime (x86) Xidi.32.dll imports, out of
+  # Microsoft's installer: the cab that holds vcruntime140.dll_x86.
+  vcredist=$(pin_fetch vcredist "$work")
+  cabextract -q -d "$work/vc" "$vcredist"
+  for cab in "$work"/vc/a*; do
+    if cabextract -l "$cab" 2>/dev/null | grep -q 'vcruntime140.dll_x86'; then
+      for d in $VC_DLLS; do cabextract -q -d "$work/vcdll" -F "${d}.dll_x86" "$cab"; done
+      break
+    fi
+  done
+  for d in $VC_DLLS; do
+    pin_verify "$work/vcdll/${d}.dll_x86" "$(pin_sha "vc-$d")"
+    cp "$work/vcdll/${d}.dll_x86" "$pkg/components/$d.dll"
+  done
 
   # The SDK's close hook and wheel layer, built from the pinned SDK by
   # packaging/build-dlls.sh (CI's extra-build) into REA_DLL_DIR.
