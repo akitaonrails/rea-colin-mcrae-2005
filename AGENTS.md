@@ -34,7 +34,7 @@ game in a test" (under "Testing").
 | `crates/cmr2005-launcher/src/cli.rs` | Modes (`--settings`, `--no-window`, `--check`, `--help`), exit codes |
 | `crates/cmr2005-launcher/src/form.rs`, `ui.rs`, `palette.rs` | The settings window and its headless tests |
 | `crates/cmr2005-launcher/src/runtime.rs` | The runtime copy's `Policy`, `cmr5.exe` with the close hook and wheel layer imports |
-| `crates/cmr2005-launcher/src/wheel.rs`, `controls.rs` | The wheel layer on a start (shown or not, its `rea_wheel.ini`); the virtual wheel's record in `SG\OPTIONS` (seed, stash, put back) |
+| `crates/cmr2005-launcher/src/wheel.rs`, `controls.rs` | The wheel layer on a start (shown or not, its `rea_wheel.ini`); the virtual wheel's and the Xidi pad's records in `SG\OPTIONS` (seed, stash, put back) |
 | `crates/cmr2005-launcher/src/main.rs` | Windows wiring: console, window, `launcher.log`, the game's process |
 | `linux/cmr2005-play`, `linux/tests/` | The Linux helper (sources `sdk/rea-play.sh`) and its tests |
 | `packaging/` | Pins, allowlist, package script, AppImage desktop entry and icon |
@@ -109,7 +109,9 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
 - **Files the game writes:** `SG\OPTIONS` and saves under `SAVEGAME_PATH`
   (`BESTTIMES_GHOSTS`, `CAREER_SLOT_*`, `CHAMPIONSHIP_SLOT_*`), plus the
   registry values above (in the HKCU key, through the redirect).
-- **Community components used:** none yet; Xidi planned (see `docs/RESEARCH.md`).
+- **Community components used:** Xidi 5.0.0 with the VC++ runtime DLLs
+  it imports (`controller` option, on by default; `components::XIDI_CONF`,
+  `controls::pad_record`, docs/RESEARCH.md "Gamepad through Xidi").
 - **Patches:** none to the game's code; the startup crash needs no patch.
   The runtime copy's `cmr5.exe` imports `rea_close_hook.dll` (SDK v0.4.3,
   `rea_close_hook::import_into`) and `rea_dinput.dll`, rebuilt from the player's bytes on every
@@ -127,6 +129,8 @@ Details and evidence are in `docs/RESEARCH.md`; keep this list current.
   menus, headless). Verified headless: intro videos, a stage, saves,
   16:9 widescreen, DXVK, every way of quitting under `cmr2005-play`, the
   settings window under Wine and play-time error dialogs, the wheel layer
-  with the virtual wheel bound and the seed kept (no real wheel). Sound,
-  driving with a real wheel and pads are not verified yet
+  with the virtual wheel bound and the seed kept (no real wheel), the
+  Xidi pad bound with the launcher's record and the game's Sine/Constant
+  effects created on it (no pad driven). Sound, driving with a real wheel,
+  a pad's motors and triggers are not verified yet
   (`docs/RUNTIME_NOTES.md`).

@@ -5,6 +5,31 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Added
+
+- **Gamepad vibration and trigger pedals** (#2). The launcher's copy of
+  the game loads Xidi 5.0.0 (with the VC++ runtime DLLs it needs), which
+  shows the game an Xbox-style pad the way it needs it: the left stick
+  steers, RT and LT are the accelerator and the brake on axes of their own
+  (both at once work), Start pauses, and the game's force feedback reaches
+  both motors. A new **Controls** tab holds the **Gamepad** switch, also
+  `controller` in `launcher.cfg` and `--controller on|off`; on by default.
+  Under Wine and Proton the launcher sets `cmr5.exe`'s DLL overrides for
+  Xidi itself.
+- With an `OPTIONS` written, the launcher sets the pad up in the game's
+  controls before a start: the triggers bound, vibration on at 80 %, and
+  player 1 moved from the keyboard to a plugged-in pad. Your changes in
+  the game are kept; a start with the wheel puts the wheel in the pad's
+  place and back again.
+
+### Changed
+
+- **Gamepad off** gives exactly 0.5.0's behaviour: Xidi, its `Xidi.ini`
+  and the launcher's Wine overrides for it are taken out again (a
+  player's own stay), and the controller record the game had comes back.
+  The `wheel-records` file now also keeps the pad's record (0.5.0's file
+  still reads).
+
 ## [0.5.0] - 2026-11-13
 
 ### Added

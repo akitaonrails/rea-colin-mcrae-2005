@@ -240,6 +240,54 @@ Static study of GOG `cmr5.exe` 1.1 (`a7ea2d33…`) for the SDK's wheel work
   and building one is unverified (U), so the launcher seeds from the
   next start.
 
+## Gamepad through Xidi (2026-11-14, issue #2)
+
+Static analysis of `cmr5.exe` (GOG 1.1), for the pad's record in
+`SG/OPTIONS` and `Xidi.ini`:
+
+- **Device type** (`0x46dfe0`): `dwDevType`'s low byte − 0x13 indexes a
+  table at `0x46e0f8`: joystick and gamepad (0x14, 0x15) are type 1,
+  driving and flight (0x16, 0x17) type 2. Xidi's controller is a gamepad,
+  so type 1: no separate pedals in the wheel's sense.
+- **A record reset for a new device** (`0x46f0d0`): byte 1 gets digital
+  pedals and analogue steering for type 1 (analogue pedals only for type
+  2); the bindings come from `0x46ebd0`, the same for both types: every
+  X axis on +0x14/+0x18/+0x24/+0x28, every Y axis on
+  +0x04/+0x08/+0x1c/+0x20/+0x2c/+0x30 and on both pedal axes +0x5c/+0x60,
+  buttons 0–9 on +0x34…+0x58. Byte 0 (vibration) is not touched: a fresh
+  slot has vibration off.
+- **Analogue pedals** (`0x46e918`): accelerate is +0x5c, brake +0x60. Type
+  2 with two different axes gets separate full-axis pedals (mode 6).
+  Anything else reads each pedal from half an axis: brake mode 2, and
+  accelerate mode 3 for any axis (2 only for an object of unknown type),
+  each with calibration entry 6. The readers' jump tables (`0x47b928`
+  accelerate, `0x47b944` brake) show mode 2 takes the value above the
+  centre (×255/32767) and mode 3 the value below it (×−255/32767), less a
+  fixed 64/255 deadzone. So a pad's accelerator is the lower half of its
+  axis and the brake the upper half, on one combined axis (the game's
+  default, Y) or on two.
+- **Our choice:** Xidi puts RT on RotX (down from the centre) and LT on
+  RotY (up from the centre), axes StandardGamepad leaves free, and the
+  record binds them (`controls::pad_record`): both pedals at once work,
+  which one combined axis can't do. With 12 buttons and a hat before
+  them, the axes are controls 14 (X), 15 (Y), 16 (Z), 17 (RotX), 18
+  (RotY), 19 (RotZ).
+- **Vibration:** byte 0 bit 1 on, bits 2–4 the strength step
+  (`0x4afc77`: `min(1, (s+1)×0.2)`); the seed uses step 3, 80 %.
+- **Pause:** the in-car mapping (`0x46e880`) reads only up to +0x4c, and
+  the Controls screen lists actions 2, 3, 12–18 (`0x600c18`); no pad
+  binding pauses that we found, so Start also presses Escape (the PCGW
+  module did the same with Back). Unverified with a pad.
+- **Ids:** Xidi 5 passes the physical pad's USB ids on in `guidProduct`
+  (CMR04, verified with an 8BitDo pad), and FFFF:0001 (`guidProduct` `{0001ffff-…}`) with no pad
+  plugged in. The launcher reads slot 0's ids through
+  `XInputGetCapabilitiesEx` (`rea_launcher_win32::xinput::ids`).
+- **Loading:** the runtime's `cmr5.exe` imports `dinput8.dll`; under Wine
+  the per-program override `dinput8 = native,builtin` (and the four VC++
+  runtime DLLs, which Wine also has) makes it Xidi's. The wheel layer,
+  imported too, wraps whatever `DirectInput8Create` the import resolved
+  to, so it sits in front of Xidi.
+
 ## Community work
 
 | Project | What it does | Licence | Maintained | Needs | Decision |
@@ -247,8 +295,8 @@ Static study of GOG `cmr5.exe` 1.1 (`a7ea2d33…`) for the SDK's wheel work
 | Official patch 1.1 (Codemasters, 2004) | white grass, flashing sun, `NOSUN`, texture option | proprietary | no | retail 1.0 | **Not needed**: the GOG build is 1.1 |
 | "64-bit patch" `cmr5win64.zip` (Codemasters, 2005; PCGW file 2288) | Win64 compatibility for retail | proprietary | no | 1.1 retail | **Not used**: replaces `cmr5.exe` and restores `protect.dll` (StarForce) |
 | `WIDESCREENDISPLAY` switch (built in) | Hor+ widescreen, HUD stretched (WSGF grade B) | n/a | n/a | any | **Configure**: candidate for the widescreen look, to be verified in-game |
-| CMR3/04/2005 Force Feedback Restore Module (PCGW file 2873, v4.3.1, 2024-12) | a configured Xidi build: XInput rumble, Start/Back → Enter/Esc | Xidi is BSD-3; the package's own licence is not stated | yes (2024) | Win10/11 | **Build on Xidi directly** (as the family already does), with our own config; don't redistribute the PCGW zip |
-| Xidi (samuelgr) | XInput controllers as DirectInput, force feedback | BSD-3 | yes | any | **Bundle** (family standard), mapping to be verified |
+| CMR3/04/2005 Force Feedback Restore Module (PCGW file 2873, v4.3.1, 2024-12) | a configured Xidi build: XInput rumble, Start/Back → Enter/Esc | Xidi is BSD-3; the package's own licence is not stated | yes (2024) | Win10/11 | **Not used, built on directly** (0.6.0): a player's report (issue #2: GameSir Nova 2 Lite, AppImage, `WINEDLLOVERRIDES=dinput8=n,b`) showed in-race vibration with it, so the game's force feedback reaches a pad through Xidi. We bundle Xidi 5.0.0 with our own `Xidi.ini` instead of the zip (behind a login, licence not stated) |
+| Xidi (samuelgr) | XInput controllers as DirectInput, force feedback | BSD-3 | yes | any | **Bundled** (0.6.0, `controller` option, on by default): Xidi 5.0.0 `Win32` files and the VC++ runtime DLLs `Xidi.32.dll` imports, our `Xidi.ini` (`components::XIDI_CONF`, see "Gamepad through Xidi") |
 | `FORCEHT` switch (GOG forum, 2012–2022) | Advanced particles on non-HT CPUs | n/a | n/a | any | **Configure** (0.4.0): passed unless `advanced_particles = off` |
 | DSOAL | EAX 4 over OpenAL Soft | LGPL | yes | any | **Later / optional**: keep a player's own `dsound.dll` (CMR4 rule); decide after audio is verified |
 | DXVK | D3D9 → Vulkan | zlib | yes | any | **To test**: WineD3D already runs at ~150 fps headless; earlier DXVK failure was a Vulkan-instance error on an old setup |
@@ -360,7 +408,8 @@ setting points at the unpacked folder (unless it came from `--game`).
    (`WIDTH`/`HEIGHT`), with widescreen through the game's own
    `WIDESCREENDISPLAY` switch once verified.
 4. Saves kept outside the runtime copy (`SAVEGAME_PATH`), mirrored safely.
-5. Controllers: XInput pads with rumble through Xidi (to verify).
+5. Controllers: XInput pads with rumble through Xidi (0.6.0; the motors
+   unverified without a pad, RUNTIME_NOTES 2026-11-14).
 6. The rest of the trouble-spot list above, as each is verified.
 
 ## Sources

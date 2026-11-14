@@ -142,8 +142,9 @@ resolution you pick in the game, choose the **Original** look.
 ## The settings window
 
 **Play** holds the game folder and the looks. **Picture** holds the
-resolution, the frame-rate cap, VSync and Advanced particles. **Wheel**
-sets up a wheel and pedals (see **Wheels**). Changing one
+resolution, the frame-rate cap, VSync and Advanced particles. **Controls**
+turns the gamepad support on or off and shows what each pad control does
+(see **Gamepad**). **Wheel** sets up a wheel and pedals (see **Wheels**). Changing one
 of the first three by hand leaves the look cards unselected (your own mix);
 Advanced particles is not part of a look.
 
@@ -165,12 +166,33 @@ activates, Enter plays. A control that can't be used says why.
 
 ## Gamepad
 
-The launcher adds nothing for pads: the game reads them itself. Set yours
-up once in the game's **Options**, in its controller settings: choose the
-pad, then the buttons and the steering and pedal axes. A gamepad
-was set up this way and played a full stage on Linux. The same screen
-calibrates the axes (**deadzone** and **saturation**) and holds the
-**Vibration** and **Vibration Strength** settings.
+The game has no XInput: on its own it sees an Xbox-style pad as an old
+DirectInput pad, with the triggers sharing one axis and no vibration. So
+the launcher's copy of the game loads [Xidi](https://github.com/samuelgr/Xidi)
+5.0.0, which shows the game the pad the way it needs it (**Controls** tab,
+**Gamepad**, on by default):
+
+| On the pad | In the game |
+| --- | --- |
+| Left stick | Steering |
+| RT / LT | Accelerator / brake, analogue, each on an axis of its own (both at once works) |
+| Start | Pause (it presses Escape) |
+| Other buttons | The game's own defaults for a pad |
+| Vibration | The game's force feedback, on both motors |
+
+With an `OPTIONS` already written (the game writes it when it first
+saves), the launcher sets the pad up in the game's own controls before
+each start: the triggers bound as accelerator and brake, **Vibration** on
+at 80 %, and player 1 moved from the keyboard to the pad when one is
+plugged in. Change anything in the game's **Options → Controllers**
+(vibration strength, buttons, calibration): it is kept from then on.
+With a wheel plugged in, the wheel takes the pad's place (see
+**Wheels**) and the pad's settings come back with the pad.
+
+**Gamepad off** gives the game your controllers as they are, as before
+Xidi: the launcher takes Xidi and its settings out again and puts back the
+controller record the game had. Set the pad up in the game's Options then.
+A pad set up that way played a full stage on Linux, without vibration.
 
 ## Wheels
 
@@ -196,8 +218,9 @@ With **Wheel support** on Auto, the launcher sets the game's controls for
 with it, steering on X, accelerate and brake on their own pedals, force
 feedback on, autocentre off. Your own changes to those controls in the
 game's **Options → Controllers** are kept from then on. Started without
-the wheel, the game gets back the controller it had before (your pad,
-as you set it up), and the wheel's settings come back with the wheel.
+the wheel, the game gets back the pad set up for Xidi (or, with Gamepad
+off, the controller it had before, as you set it up), and the wheel's
+settings come back with the wheel.
 
 **There is nothing to set up before the game first saves.** The game
 writes its settings file (`saves\OPTIONS`) when it saves for the first
@@ -270,6 +293,7 @@ filled in.
 | `fps_limit` / `--fps-limit` | Picture: Frame-rate cap | `0`–`1000`, `off` | no cap | The most frames per second. 60 keeps the game's animations steady. Under Wine and Proton only. |
 | `vsync` / `--vsync` | Picture: VSync | `on`, `off` | the game's own | Waits for the screen: no tearing. Under Wine and Proton only. |
 | `advanced_particles` / `--advanced-particles` | Picture: Advanced particles | `on`, `off` | on | Starts the game with `FORCEHT`, which makes its Advanced particles option available on any processor (it starts on; turn it off here or in the game). Heavy snow on the Swedish stages can hide the road with them on. |
+| `controller` / `--controller` | Controls: Gamepad | `on`, `off` | on | An Xbox-style (XInput) pad through Xidi: left stick steers, RT/LT are the accelerator and brake, Start pauses, vibration works (see **Gamepad**). Off: the game reads your controllers on its own. |
 | `wheel` / `--wheel` | Wheel: Wheel support | `auto`, `on`, `off` | auto | Auto: when a wheel is plugged in as the game starts, the game sees one wheel made from it and your pedals ("rea wheel"), already set up in its controls. On: always. Off: the game sees your controllers as they are. |
 | `wheel_device` / `--wheel-device` | Wheel: Wheel | a DirectInput instance GUID | picked for you | The wheel to drive with. |
 | `wheel_pedals` / `--wheel-pedals` | Wheel: Pedals | a DirectInput instance GUID | the calibrated pedals, else the wheel's own | Pedals on their own USB device. |
@@ -316,6 +340,7 @@ with 5.
 | `cmr2005-play`'s logs and lock | — | `~/.config/cmr2005-launcher` |
 | The wheel's pedal calibration (`rea_wheel.ini`) | beside `launcher.cfg` | beside `launcher.cfg` |
 | The game's wheel and pad controls the launcher keeps aside (`wheel-records`) | `%LOCALAPPDATA%\CMR2005Launcher\` | `…/CMR2005Launcher/` |
+| Xidi and its settings (`dinput8.dll`, `Xidi.32.dll`, the VC++ runtime DLLs, `Xidi.ini`), with Gamepad on | `…\CMR2005Launcher\runtime\` | `…/CMR2005Launcher/runtime/` |
 | The wheel layer's settings and log (`rea_wheel.ini`, `rea_wheel.log` with `wheel_log = on`) | `…\CMR2005Launcher\runtime\` | `…/CMR2005Launcher/runtime/` |
 
 A `launcher.cfg` next to `CMR2005Launcher.exe` is used instead (a portable
@@ -331,7 +356,7 @@ Registry entries the launcher writes:
 | --- | --- | --- |
 | The game's own settings | `HKEY_CURRENT_USER\Software\Codemasters\Colin McRae Rally 2005`, on Windows (no administrator rights needed) and inside the prefix on Linux. The game looks for them under `HKEY_LOCAL_MACHINE\SOFTWARE\CODEMASTERS\Colin McRae Rally 2005`; `rea_close_hook.dll`, which the launcher's copy of the game loads, shows it this key instead. Settings from an older version of the launcher (in `HKEY_LOCAL_MACHINE` or Windows' per-user VirtualStore copy) are carried over once and left where they were. | `INSTALL_PATH`, `SAVEGAME_PATH`, and `WIDTH`/`HEIGHT` when a look or resolution is set; the game keeps `LANGUAGE`, `SELECTION` (its Graphics options) and `CD_KEY` there too |
 | The fast-GPU preference (Windows only) | `HKEY_CURRENT_USER\Software\Microsoft\DirectX\UserGpuPreferences` | a value named after the private copy's `cmr5.exe` (by default `%LOCALAPPDATA%\CMR2005Launcher\runtime\cmr5.exe`): `GpuPreference=2;`, written once, when it isn't there yet |
-| DXVK for the game (Wine and Proton only) | `HKEY_CURRENT_USER\Software\Wine\AppDefaults\cmr5.exe\DllOverrides`, and the launcher's record of it in `HKEY_CURRENT_USER\Software\rea-launcher\DllOverrides\cmr5.exe` | `d3d9` = `native,builtin` |
+| DXVK and Xidi for the game (Wine and Proton only) | `HKEY_CURRENT_USER\Software\Wine\AppDefaults\cmr5.exe\DllOverrides`, and the launcher's record of it in `HKEY_CURRENT_USER\Software\rea-launcher\DllOverrides\cmr5.exe` | `d3d9` = `native,builtin`; with Gamepad on also `dinput8`, `msvcp140`, `msvcp140_atomic_wait`, `concrt140`, `vcruntime140` (taken away again with Gamepad off, unless you set them yourself) |
 | OpenGL through GLX for the settings window (Wine and Proton only) | `HKEY_CURRENT_USER\Software\Wine\X11 Driver` | `UseEGL` = `N`, when it isn't set yet |
 
 ## Troubleshooting
@@ -510,6 +535,10 @@ the editions, the registry fix, the installer unpacking, the looks.
   contributors: Direct3D 9 on Vulkan under Wine and Proton.
 - [innoextract](https://constexpr.org/innoextract/) by Daniel Scharrer:
   unpacks GOG's installer.
+- [Xidi](https://github.com/samuelgr/Xidi) by Samuel Grossman
+  (BSD-3-Clause): XInput pads, triggers and vibration for the game; and
+  the PCGamingWiki "Force Feedback Restore Module", whose report showed
+  the game's vibration reaches a pad through Xidi.
 - [Wine](https://www.winehq.org) and Kron4ek's
   [portable builds](https://github.com/Kron4ek/Wine-Builds), and the
   AppImage tools, in the AppImage.

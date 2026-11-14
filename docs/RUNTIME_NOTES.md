@@ -561,3 +561,38 @@ above): both DLLs mapped; the layer log (`rea_dinput 0.9.0`) shows "rea
 wheel" created and `DIPROP_RANGE` set on its four axes; the launcher left
 the kept record ("OPTIONS controls unchanged"); Alt+F4 held with mouse
 moves ended everything in 4.0 s (`.work/realgame/logs/e1-v090`).
+
+### 2026-11-14: the gamepad through Xidi 5.0.0 (issue #2, headless)
+
+Release i686 build with the `controller` option, the DLLs from
+`packaging/build-dlls.sh`, packaged with `packaging/package.sh
+--no-appimage` (Xidi 5.0.0 and the four VC++ runtime DLLs checked against
+their pins). Wine 11.21 and gamescope 3.17.0 (`--backend headless`) in the
+`gaming` box from `env -i`, the throwaway prefix `.work/realgame/prefix-h1`,
+a private PipeWire null sink. Harness `.work/xidi/bin/xidi.sh` (through
+`cmr2005-play --play`) and `bin/direct.sh` (the runtime's `cmr5.exe`
+started directly: Xidi's own log at level 4, or the layer's test-only fake
+wheel); `bin/nopad.sh` hid the host's controllers from Wine (winebus: no
+SDL, hidraw or evdev) from d1 on, so no run drove a real pad. Every run:
+Return through the menus into a Time Trial stage, `tools/opts.py` on the
+game's own copy of `OPTIONS`, then a close. Evidence in
+`.work/xidi/logs/{x1-pad,d1-xidilog,x2-pad-hidden,x3-wheel,d2-fake-wheel,x4-gamepad-off}`.
+
+| Run | What | Result |
+|---|---|---|
+| x1 | gamepad on (default), wheel off; a real pad of the owner's (8BitDo, XInput 2dc8:310b) was visible to Wine | the launcher installed `dinput8.dll`, `Xidi.32.dll`, the VC++ DLLs and `Xidi.ini`, wrote the `dinput8`/VC++ overrides (`native,builtin`) beside `d3d9`, and seeded slot 2 for the Xidi pad 2dc8:310b (0.5.0's `wheel-records` read, the wheel's record stashed). The stage ran; the re-saved `OPTIONS` held the seed (ids 2dc8:310b, accelerate 17, brake 18, analogue, vibration byte `0x0e`): the game kept it, so Xidi reported the pad's own ids. The game then ended on its own (exit 0) within a minute of the stage start, before the memory read; not seen in any later run, cause unknown |
+| d1 | direct start, Xidi's log on, no pad | Xidi 5.0.0 loaded from the runtime (system DirectInput behind it, no warnings or errors); `CMR2005Gamepad`: X, Y (force feedback), Z, RotX, RotY, RotZ, 12 buttons, a hat; "Xidi virtual controller 1" presented (instance `{0001ffff-…}`). The game created and acquired it, set `DIPROP_RANGE` and `DIPROP_AUTOCENTER`, and made its effects on X and Y: **Sine and ConstantForce created and started** on the Xidi controller, Spring and Damper refused by Xidi (`0x80040154`, effects Xidi doesn't have). Without the launcher the record (ids 2dc8:310b) didn't match Xidi's unplugged ids, **FFFF:0001**, and the game reset it to its pad defaults (digital pedals, Y), keeping the vibration byte. Escape in the stage paused it ("P1 PAUSED … press ESCAPE to unpause") |
+| x2 | through the launcher, gamepad on, no pad | "the Xidi pad ffff:0001 seeded in slot 2"; in the stage the game's copy held it (ids FFFF:0001, accelerate 17, brake 18, analogue; byte 0 `0x0f`, the game's attached bit set): **the game bound the Xidi controller with the launcher's record**. 30 s more in the stage, then Alt+F4 ended everything in 4.0 s; "the Xidi pad ffff:0001's controls kept" |
+| x3 | wheel on, gamepad on | "the virtual wheel's record (with your in-game changes) back in slot 2"; the layer log found "Xidi Virtual Controller 1 … Pad, 6 axes, 12 buttons, force feedback" (so it lists through Xidi, in front of it; its `DIPROP_VIDPID` answer is 0000:0000), created "rea wheel" and the game's Spring, Damper, Sine and Constant effects; the wheel's seed held in the game's memory and the re-saved file |
+| d2 | direct start, the layer's `fake = wheel`, Xidi in place | the layer found the Xidi controller and the fake wheel, hid the wheel, made "rea wheel" from it, took it exclusive in the background and made the game's four effects on it; the record held in memory |
+| x4 | gamepad off, wheel off | the launcher took out the six DLLs and `Xidi.ini` (ledger: "Restored"), removed its five overrides (`d3d9` stayed), and put the game's own record back: **`OPTIONS` byte for byte the file launcher 0.5.0 left** (`.work/realgame/logs/a1-off`) |
+
+The test prefix's `launcher.cfg`, `wheel-records` and saves were put back
+afterwards, and the winebus values removed again.
+
+**Not verified (no pad driven):** the motors themselves and how the
+game's Sine/Constant effects feel through Xidi's magnitude projection;
+the triggers and stick reaching the car (no input was sent); Start's
+Escape with a pad; Xidi's ids for each pad brand (one 8BitDo matched);
+Windows 10/11 with a real pad. The early exit in x1 is open: it is the
+only run where Wine saw a real pad.
