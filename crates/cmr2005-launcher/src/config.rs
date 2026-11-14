@@ -125,6 +125,15 @@ pub const OPTIONS: &[OptionSpec] = &[
          them off here or in the game's Options, Graphics. Heavy snow on the Swedish stages \
          can hide the road with them on.",
     ),
+    OptionSpec::new(
+        "controller",
+        Kind::Toggle,
+        "Gamepad",
+        "Lets the game use an Xbox-style (XInput) pad through Xidi: the left stick steers, \
+         the triggers are the accelerator and the brake, Start pauses, and the game's \
+         vibration reaches the pad. Off: the game reads your controllers on its own, \
+         without vibration.",
+    ),
     // The Wheel tab's settings (`rea_launcher::wheel::dinput::options`).
     wheel_options::WHEEL,
     wheel_options::WHEEL_DEVICE,
@@ -306,6 +315,8 @@ pub struct Settings {
     pub vsync: Option<bool>,
     /// `None`: on (the game's `FORCEHT` switch, docs/RESEARCH.md).
     pub advanced_particles: Option<bool>,
+    /// Xidi for XInput pads; `None`: on.
+    pub controller: Option<bool>,
     /// The Wheel tab's settings: [`default_wheel`] with the keys set here.
     pub wheel: Setup,
     /// The wheel keys set here, so flags win only for those.
@@ -322,6 +333,7 @@ impl Default for Settings {
             fps_limit: None,
             vsync: None,
             advanced_particles: None,
+            controller: None,
             wheel: default_wheel(),
             wheel_keys: Vec::new(),
             runtime: None,
@@ -356,6 +368,7 @@ impl Settings {
             ("fps_limit", Value::Number(fps)) => self.fps_limit = Some(fps),
             ("vsync", Value::Toggle(on)) => self.vsync = Some(on),
             ("advanced_particles", Value::Toggle(on)) => self.advanced_particles = Some(on),
+            ("controller", Value::Toggle(on)) => self.controller = Some(on),
             _ => return Err(Rejected::Unknown),
         }
         Ok(())
@@ -376,6 +389,7 @@ impl Settings {
         self.fps_limit = flags.fps_limit.or(self.fps_limit);
         self.vsync = flags.vsync.or(self.vsync);
         self.advanced_particles = flags.advanced_particles.or(self.advanced_particles);
+        self.controller = flags.controller.or(self.controller);
         for key in flags.wheel_keys {
             let text = flags.wheel.value(key).unwrap_or_default();
             if let Some(Ok(value)) = spec::find(OPTIONS, key).map(|row| row.parse(&text)) {
@@ -389,6 +403,12 @@ impl Settings {
     /// particles on any processor: on unless turned off.
     pub fn advanced_particles(&self) -> bool {
         self.advanced_particles.unwrap_or(true)
+    }
+
+    /// Whether the game reads XInput pads through Xidi: on unless turned
+    /// off.
+    pub fn controller(&self) -> bool {
+        self.controller.unwrap_or(true)
     }
 
     /// The picture for this run: the look's values, then the options set
@@ -597,6 +617,22 @@ mod tests {
         assert!(off.merged(flags).advanced_particles(), "a flag wins");
         let (look, _) = parse_file("advanced_particles = off\nlook = widescreen\n");
         assert!(!look.advanced_particles(), "a look leaves it alone");
+    }
+
+    #[test]
+    fn the_gamepad_is_on_unless_turned_off() {
+        assert!(Settings::default().controller());
+        let (off, warnings) = parse_file("controller = off\n");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(!off.controller());
+        let (flags, _) = parse_args(["--controller".into(), "on".into()]).unwrap();
+        assert!(off.clone().merged(flags).controller(), "a flag wins");
+        let (look, _) = parse_file("controller = off\nlook = steam_deck\n");
+        assert!(!look.controller(), "a look leaves it alone");
+        assert!(
+            !off.merged(Settings::default()).controller(),
+            "no flag: the file's"
+        );
     }
 
     #[test]

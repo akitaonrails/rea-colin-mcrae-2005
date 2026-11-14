@@ -11,6 +11,7 @@ Options (each is also a launcher.cfg key):
   --fps-limit <0-1000>                   Frame-rate cap
   --vsync on|off                         VSync
   --advanced-particles on|off            Advanced particles
+  --controller on|off                    Gamepad
   --wheel auto|on|off                    Wheel support
   --wheel-device <guid>                  Wheel
   --wheel-pedals <guid>                  Pedals

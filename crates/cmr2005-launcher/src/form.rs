@@ -25,10 +25,12 @@ impl Form {
             }
         }
         let mut form = Form { values };
-        // Unset means on: the switch shows what the game gets.
-        let particles = form.value_mut("advanced_particles");
-        if particles.is_empty() {
-            *particles = cfg::on_off(true).to_owned();
+        // Unset means on: the switches show what the game gets.
+        for key in ["advanced_particles", "controller"] {
+            let value = form.value_mut(key);
+            if value.is_empty() {
+                *value = cfg::on_off(true).to_owned();
+            }
         }
         form
     }
@@ -168,6 +170,15 @@ mod tests {
         let off = Form::from_text("advanced_particles = off\n");
         assert_eq!(off.get("advanced_particles"), "off");
         assert!(!off.settings().advanced_particles());
+    }
+
+    #[test]
+    fn the_gamepad_switch_shows_what_the_game_gets() {
+        assert_eq!(Form::from_text("").get("controller"), "on");
+        assert!(Form::from_text("").settings().controller());
+        let off = Form::from_text("controller = off\n");
+        assert_eq!(off.get("controller"), "off");
+        assert!(!off.settings().controller());
     }
 
     #[test]

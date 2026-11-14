@@ -34,10 +34,12 @@ fn launch(name: &str, flags: &[&str], screen: (u32, u32), wine: bool) {
         wine,
     );
     // No controller is attached here: Auto shows no wheel.
-    let plan = plan.with_wheel(
-        wheel::shown(&settings.wheel, Vec::new),
-        wheel::runtime_ini(&settings.wheel, ""),
-    );
+    let plan = plan
+        .with_wheel(
+            wheel::shown(&settings.wheel, Vec::new),
+            wheel::runtime_ini(&settings.wheel, ""),
+        )
+        .with_gamepad(settings.controller(), wine);
     let text = format!(
         "flags: {}\nscreen: {}x{}, Wine: {wine}\npicture: {}\n\n{}",
         flags.join(" "),
@@ -100,6 +102,18 @@ fn option_mixes() {
         &["--wheel", "on", "--wheel-lock", "900", "--wheel-ffb", "60"],
         (1920, 1080),
         true,
+    );
+    launch(
+        "gamepad-off.txt",
+        &["--controller", "off"],
+        (1920, 1080),
+        true,
+    );
+    launch(
+        "gamepad-off-windows.txt",
+        &["--controller", "off"],
+        (1920, 1080),
+        false,
     );
     launch(
         "no-advanced-particles.txt",

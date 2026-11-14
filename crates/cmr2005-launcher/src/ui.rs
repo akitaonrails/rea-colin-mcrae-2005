@@ -6,7 +6,8 @@
 //!
 //! Layout: the hero image strip on the left, the title and status, the
 //! Play tab (game folder and look cards), the Picture tab (the picture
-//! rows of `config::OPTIONS`) and the Wheel tab (the SDK's `WheelTab`:
+//! rows of `config::OPTIONS`), the Controls tab (the Gamepad switch and
+//! what the game sees of a pad) and the Wheel tab (the SDK's `WheelTab`:
 //! the `wheel*` options, and the pedal calibration it keeps in
 //! `rea_wheel.ini` beside `launcher.cfg`), the footer with the Play plate.
 //! Any change to the window's look or layout goes through a design skill
@@ -45,13 +46,15 @@ pub const HERO_CREDIT: &str = "Photo: KevBow, CC BY 2.0 (Wikimedia Commons)";
 pub enum Tab {
     Play,
     Picture,
+    Controls,
     Wheel,
 }
 
 impl Tab {
-    pub const NAMES: [(Tab, &'static str); 3] = [
+    pub const NAMES: [(Tab, &'static str); 4] = [
         (Tab::Play, "Play"),
         (Tab::Picture, "Picture"),
+        (Tab::Controls, "Controls"),
         (Tab::Wheel, "Wheel"),
     ];
 
@@ -216,6 +219,7 @@ pub fn draw(ui: &mut egui::Ui, w: &mut Window) {
         widgets::tab_body(ui, w.tab, |ui| match w.tab {
             Tab::Play => play_tab(ui, w),
             Tab::Picture => picture_tab(ui, w),
+            Tab::Controls => controls_tab(ui, w),
             Tab::Wheel => wheel_tab(ui, w),
         });
     });
@@ -343,12 +347,49 @@ fn wheel_tab(ui: &mut egui::Ui, w: &mut Window) {
     w.sync_wheel();
 }
 
-/// Every option row with a window control that is not on the Play or the
-/// Wheel tab.
+/// What an Xbox-style pad does in the game with the Gamepad switch on.
+const PAD_CONTROLS: [(&str, &str); 4] = [
+    ("Left stick", "Steering"),
+    ("RT / LT", "Accelerator / brake, both at once if you like"),
+    ("Start", "Pause"),
+    ("Vibration", "The game's force feedback, on both motors"),
+];
+
+/// The Gamepad switch, and what the game gets from a pad with it on.
+fn controls_tab(ui: &mut egui::Ui, w: &mut Window) {
+    spec_row(ui, row("controller"), w.form.value_mut("controller"));
+    ui.add_space(12.0);
+    if !w.form.settings().controller() {
+        widgets::note(
+            ui,
+            "Off: the game reads your controllers by itself, without vibration. Set the pad up \
+             in the game's Options, Controllers.",
+        );
+        return;
+    }
+    widgets::heading(ui, "What the game sees");
+    for (control, action) in PAD_CONTROLS {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(control).font(body(15.0)).color(INK));
+            ui.label(RichText::new(action).font(body(14.0)).color(MUTED));
+        });
+    }
+    ui.add_space(8.0);
+    widgets::note(
+        ui,
+        "Vibration starts at 80 %; change it, and the buttons, in the game's Options, \
+         Controllers. With a wheel plugged in, the wheel drives and the pad waits behind it.",
+    );
+}
+
+/// Every option row with a window control that is not on the Play, the
+/// Controls or the Wheel tab.
 fn picture_tab(ui: &mut egui::Ui, w: &mut Window) {
     let mut changed = false;
     for row in OPTIONS.iter().filter(|row| {
-        !row.launcher_only && !matches!(row.key, "game" | "look") && !config::is_wheel_key(row.key)
+        !row.launcher_only
+            && !matches!(row.key, "game" | "look" | "controller")
+            && !config::is_wheel_key(row.key)
     }) {
         changed |= spec_row(ui, row, w.form.value_mut(row.key)).changed();
         ui.add_space(10.0);
@@ -644,7 +685,7 @@ mod tests {
     #[test]
     fn the_window_has_a_control_for_every_option_and_no_other() {
         let mut ui = open("");
-        for tab in ["Picture", "Wheel"] {
+        for tab in ["Picture", "Controls", "Wheel"] {
             ui.get_by_role_and_label(Role::Tab, tab).click();
             ui.run();
         }
@@ -854,6 +895,7 @@ mod tests {
             crate::wheel::shown(setup, Vec::new),
             crate::wheel::runtime_ini(setup, calibration),
         )
+        .with_gamepad(settings.controller(), true)
     }
 
     /// The runtime's `rea_wheel.ini` in a plan.
@@ -963,6 +1005,32 @@ mod tests {
         assert!(!game_gets(&ui).args.contains(&crate::plan::FORCE_HT_ARG));
     }
 
+    /// The Gamepad switch saves what `--controller` sets, and the game
+    /// gets Xidi with it on and none of it with it off.
+    #[test]
+    fn the_gamepad_switch_reaches_the_game() {
+        let mut ui = open("");
+        let on = game_gets(&ui);
+        assert!(
+            on.installed.contains(&crate::components::XIDI_DLL),
+            "on by default"
+        );
+        assert!(on.app_dll_overrides.contains(&"dinput8"));
+        ui.get_by_role_and_label(Role::Tab, "Controls").click();
+        ui.run();
+        assert!(ui.query_by_label("What the game sees").is_some());
+        ui.get_by_role_and_label(Role::Switch, "Gamepad").click();
+        ui.run();
+        let saved = ui.state().form.settings();
+        assert_eq!(saved.controller, Some(false));
+        assert_eq!(saved.controller, flags(&["--controller", "off"]).controller);
+        assert!(ui.query_by_label("What the game sees").is_none());
+        let off = game_gets(&ui);
+        assert!(off.taken_out.contains(&crate::components::XIDI_DLL));
+        assert_eq!(off.ledger_files, [(crate::components::XIDI_INI, None)]);
+        assert!(off.app_dll_overrides_removed.contains(&"dinput8"));
+    }
+
     #[test]
     fn the_vsync_switch_saves_what_its_flag_sets() {
         let mut ui = open("vsync = on\n");
@@ -1017,10 +1085,11 @@ mod tests {
     #[test]
     fn tabs_step_and_wrap() {
         assert_eq!(Tab::Play.step(1), Tab::Picture);
-        assert_eq!(Tab::Picture.step(1), Tab::Wheel);
+        assert_eq!(Tab::Picture.step(1), Tab::Controls);
+        assert_eq!(Tab::Controls.step(1), Tab::Wheel);
         assert_eq!(Tab::Wheel.step(1), Tab::Play);
         assert_eq!(Tab::Play.step(-1), Tab::Wheel);
         let names: Vec<&str> = Tab::NAMES.iter().map(|(_, name)| *name).collect();
-        assert_eq!(names, ["Play", "Picture", "Wheel"]);
+        assert_eq!(names, ["Play", "Picture", "Controls", "Wheel"]);
     }
 }

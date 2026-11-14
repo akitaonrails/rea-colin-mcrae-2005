@@ -8,7 +8,8 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use crate::components::{
-    self, APP_OVERRIDES, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DXVK_DLL, WHEEL_DLL,
+    self, CLOSE_HOOK_CONFIG, CLOSE_HOOK_DLL, DXVK_DLL, DXVK_OVERRIDES, WHEEL_DLL, XIDI_CONF,
+    XIDI_DLLS, XIDI_INI, XIDI_OVERRIDES,
 };
 use crate::config::Picture;
 use rea_launcher::wheel::dinput;
@@ -43,8 +44,16 @@ pub struct Plan {
     pub taken_out: Vec<&'static str>,
     /// Generated runtime files: (name, contents); `None` removes it.
     pub files: Vec<(&'static str, Option<String>)>,
-    /// Wine only: `cmr5.exe`'s per-program DLL overrides, set when absent.
+    /// Generated runtime files installed through the ledger like the
+    /// bundled DLLs: written unless the private copy holds the player's
+    /// own; `None` takes the launcher's out.
+    pub ledger_files: Vec<(&'static str, Option<String>)>,
+    /// Wine only: `cmr5.exe`'s per-program DLL overrides
+    /// (`components::OVERRIDE_MODE`), set when absent.
     pub app_dll_overrides: Vec<&'static str>,
+    /// Wine only: overrides taken away again when they are the launcher's
+    /// (a component turned off); the player's stay.
+    pub app_dll_overrides_removed: Vec<&'static str>,
     /// The game's environment additions.
     pub env: Vec<(&'static str, &'static str)>,
     /// Windows only: the fast-GPU preference for the runtime's exe.
@@ -141,11 +150,13 @@ pub fn plan_on(
         exe_imports: vec![CLOSE_HOOK_DLL, WHEEL_DLL],
         taken_out,
         files: vec![(DXVK_CONF, dxvk_conf)],
+        ledger_files: Vec::new(),
         app_dll_overrides: if wine {
-            APP_OVERRIDES.iter().map(|(dll, _)| *dll).collect()
+            DXVK_OVERRIDES.to_vec()
         } else {
             Vec::new()
         },
+        app_dll_overrides_removed: Vec::new(),
         // The hook DLL, loaded through the import table, installs itself
         // on the game's window thread (`ATTACH_ENV`): the launcher never
         // touches the running game. It also sends the game's opens of its
@@ -170,6 +181,28 @@ impl Plan {
     pub fn with_wheel(mut self, shown: bool, ini: String) -> Plan {
         self.files.push((dinput::FILE, Some(ini)));
         self.env.push((wheel::MODE_ENV, wheel::mode_value(shown)));
+        self
+    }
+
+    /// This plan with Xidi (the `controller` option): its DLLs, `Xidi.ini`
+    /// and, under Wine, the overrides that load them; off, all of them
+    /// taken out again, so the game reads its controllers as it did
+    /// before the launcher had Xidi.
+    pub fn with_gamepad(mut self, on: bool, wine: bool) -> Plan {
+        if on {
+            self.installed.extend(XIDI_DLLS);
+            self.ledger_files
+                .push((XIDI_INI, Some(XIDI_CONF.to_owned())));
+            if wine {
+                self.app_dll_overrides.extend(XIDI_OVERRIDES);
+            }
+        } else {
+            self.taken_out.extend(XIDI_DLLS);
+            self.ledger_files.push((XIDI_INI, None));
+            if wine {
+                self.app_dll_overrides_removed.extend(XIDI_OVERRIDES);
+            }
+        }
         self
     }
 
@@ -201,8 +234,15 @@ impl Plan {
                 "\n[Wine per-program DLL overrides for cmr5.exe, set when absent]"
             );
             for dll in &self.app_dll_overrides {
-                let _ = writeln!(out, "{dll} = native,builtin");
+                let _ = writeln!(out, "{dll} = {}", components::OVERRIDE_MODE.value());
             }
+        }
+        if !self.app_dll_overrides_removed.is_empty() {
+            let _ = writeln!(
+                out,
+                "\n[Wine per-program DLL overrides for cmr5.exe, removed when the launcher's]\n{}",
+                self.app_dll_overrides_removed.join(", ")
+            );
         }
         let _ = writeln!(out, "\n[environment]");
         for (name, value) in &self.env {
@@ -215,6 +255,16 @@ impl Plan {
                 }
                 None => {
                     let _ = writeln!(out, "\n[file {name}: removed]");
+                }
+            }
+        }
+        for (name, contents) in &self.ledger_files {
+            match contents {
+                Some(text) => {
+                    let _ = write!(out, "\n[file {name}, unless the player's own]\n{text}");
+                }
+                None => {
+                    let _ = writeln!(out, "\n[file {name}: taken out when the launcher's]");
                 }
             }
         }
@@ -428,6 +478,67 @@ mod tests {
                     .contains(&(wheel::MODE_ENV, wheel::mode_value(shown)))
             );
         }
+    }
+
+    /// Gamepad on: Xidi, its VC++ runtime and `Xidi.ini` go in, and Wine
+    /// loads them before its own DLLs. Off: everything of Xidi comes out
+    /// again, and the plan is otherwise the one without Xidi.
+    #[test]
+    fn the_gamepad_brings_xidi_and_off_takes_it_out() {
+        let base = || {
+            plan(
+                &picture(Resolution::Original),
+                true,
+                Path::new("/r"),
+                Path::new("/s"),
+                true,
+            )
+        };
+        let on = base().with_gamepad(true, true);
+        assert_eq!(on.installed[3..], XIDI_DLLS);
+        assert_eq!(on.ledger_files, [(XIDI_INI, Some(XIDI_CONF.to_owned()))]);
+        assert_eq!(
+            on.app_dll_overrides,
+            [
+                "d3d9",
+                "dinput8",
+                "msvcp140",
+                "msvcp140_atomic_wait",
+                "concrt140",
+                "vcruntime140"
+            ]
+        );
+        assert!(on.app_dll_overrides_removed.is_empty());
+        assert_eq!(
+            on.exe_imports,
+            [CLOSE_HOOK_DLL, WHEEL_DLL],
+            "Xidi is never imported"
+        );
+
+        let off = base().with_gamepad(false, true);
+        assert_eq!(off.installed, base().installed);
+        assert_eq!(off.taken_out, XIDI_DLLS);
+        assert_eq!(off.ledger_files, [(XIDI_INI, None)]);
+        assert_eq!(off.app_dll_overrides, ["d3d9"]);
+        assert_eq!(off.app_dll_overrides_removed, XIDI_OVERRIDES);
+        assert_eq!(
+            (off.args, off.env, off.files),
+            (base().args, base().env, base().files)
+        );
+
+        let windows = plan(
+            &picture(Resolution::Original),
+            true,
+            Path::new("/r"),
+            Path::new("/s"),
+            false,
+        );
+        let on = windows.clone().with_gamepad(true, false);
+        assert!(on.app_dll_overrides.is_empty(), "no Wine");
+        assert!(on.installed.contains(&"dinput8.dll"));
+        let off = windows.with_gamepad(false, false);
+        assert!(off.app_dll_overrides_removed.is_empty());
+        assert_eq!(off.taken_out, [&[DXVK_DLL][..], &XIDI_DLLS].concat());
     }
 
     #[test]

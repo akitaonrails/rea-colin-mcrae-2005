@@ -24,7 +24,7 @@ mod app {
     use std::path::{Path, PathBuf};
 
     use cmr2005_launcher::cli::{self, Invocation, Mode};
-    use cmr2005_launcher::components::{self, APP_OVERRIDES};
+    use cmr2005_launcher::components::{self, OVERRIDE_MODE};
     use cmr2005_launcher::registry;
     use cmr2005_launcher::saves::{self, Folders};
     use cmr2005_launcher::source::{self, Source};
@@ -239,7 +239,8 @@ mod app {
 
         let wine = wine::is_wine();
         let from_installer = matches!(source, Source::Installer(_));
-        components::validate(&components_dir, wine, from_installer)?;
+        let gamepad = settings.controller();
+        components::validate(&components_dir, wine, from_installer, gamepad)?;
         for line in components::describe(&components_dir) {
             out.log.line(&format!("component {line}"));
         }
@@ -306,8 +307,13 @@ mod app {
             wheel_setup.mode.key(),
             if wheel_shown { "sees" } else { "doesn't see" }
         ));
+        let want = controls::Want::for_start(wheel_shown, gamepad, xidi_pad);
+        out.log.line(&format!(
+            "gamepad (Xidi) {}; slot 2 of OPTIONS for {want}",
+            cfg::on_off(gamepad)
+        ));
         let stash = home().join(controls::STASH);
-        match controls::prepare(&folders.saves, &stash, wheel_shown) {
+        match controls::prepare(&folders.saves, &stash, want) {
             Ok(change) => out.log.line(&change.describe()),
             Err(error) => out.warn(&format!("the game's controls were not set up: {error}")),
         }
@@ -338,7 +344,8 @@ mod app {
             wine,
             placement.virtual_desktop.then_some(screen).flatten(),
         )
-        .with_wheel(wheel_shown, wheel::runtime_ini(wheel_setup, &calibration));
+        .with_wheel(wheel_shown, wheel::runtime_ini(wheel_setup, &calibration))
+        .with_gamepad(gamepad, wine);
         install_components(out, &plan, &game_dir, &folders.runtime, &components_dir)?;
         // From the player's bytes on every start, with the close hook in
         // its import table: Windows loads the hook with the game, which
@@ -352,12 +359,7 @@ mod app {
             plan.exe_imports.join(", ")
         ));
         let before = write_registry(out, plan.registry.clone())?;
-        if !plan.app_dll_overrides.is_empty() {
-            let applied = wine::app_dll_overrides(edition::GAME_EXE, &APP_OVERRIDES)
-                .map_err(|error| error.to_string())?;
-            out.log
-                .line(&format!("Wine DLL overrides for cmr5.exe: {applied:?}"));
-        }
+        set_dll_overrides(out, &plan)?;
         out.log.line(&format!("arguments: {:?}", plan.args));
 
         let exe = folders.runtime.join(edition::GAME_EXE);
@@ -394,13 +396,54 @@ mod app {
         out.log.line(&format!("game exited with {code}"));
         check_after_run(out, picture.size(), &before);
         match controls::keep(&folders.saves, &stash) {
-            Ok(true) => out
+            Ok(Some(controls::Kept::Wheel)) => out
                 .log
                 .line("the virtual wheel's controls kept for the next start"),
-            Ok(false) => {}
-            Err(error) => out.warn(&format!("the wheel's controls were not kept: {error}")),
+            Ok(Some(controls::Kept::Pad(ids))) => out.log.line(&format!(
+                "the Xidi pad {ids}'s controls kept for the next start"
+            )),
+            Ok(None) => {}
+            Err(error) => out.warn(&format!("the game's controls were not kept: {error}")),
         }
         Ok(code as i32)
+    }
+
+    /// The ids of the pad in XInput slot 0, the one Xidi shows the game as
+    /// its first controller.
+    fn xidi_pad() -> Option<controls::Ids> {
+        rea_launcher_win32::xinput::ids(0).map(|(vid, pid)| controls::Ids {
+            pid: u32::from(pid),
+            vid: u32::from(vid),
+        })
+    }
+
+    /// Wine's per-program DLL overrides for `cmr5.exe`: the plan's set
+    /// (where the player hasn't set their own), and those of a component
+    /// turned off taken away again when they are the launcher's.
+    fn set_dll_overrides(out: &Out, plan: &plan::Plan) -> Result<(), String> {
+        let with_mode = |dlls: &[&'static str]| -> Vec<(&'static str, wine::DllMode)> {
+            dlls.iter().map(|dll| (*dll, OVERRIDE_MODE)).collect()
+        };
+        if !plan.app_dll_overrides.is_empty() {
+            let applied =
+                wine::app_dll_overrides(edition::GAME_EXE, &with_mode(&plan.app_dll_overrides))
+                    .map_err(|error| error.to_string())?;
+            out.log
+                .line(&format!("Wine DLL overrides for cmr5.exe: {applied:?}"));
+        }
+        if !plan.app_dll_overrides_removed.is_empty() {
+            let removed = wine::remove_app_dll_overrides(
+                edition::GAME_EXE,
+                &with_mode(&plan.app_dll_overrides_removed),
+            )
+            .map_err(|error| error.to_string())?;
+            if !removed.is_empty() {
+                out.log.line(&format!(
+                    "Wine DLL overrides for cmr5.exe removed: {removed:?}"
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Unpacks GOG's installer into `dest` with the bundled innoextract,
@@ -429,8 +472,9 @@ mod app {
         }
     }
 
-    /// DXVK in or out through the ledger (a player's own `d3d9.dll`
-    /// stays), and the generated files.
+    /// DXVK and Xidi in or out through the ledger (a player's own
+    /// `d3d9.dll`, `dinput8.dll` or `Xidi.ini` stays), and the generated
+    /// files.
     fn install_components(
         out: &Out,
         plan: &plan::Plan,
@@ -455,6 +499,20 @@ mod app {
             if outcome != Outcome::Absent {
                 out.log
                     .line(&format!("component {name} taken out: {outcome:?}"));
+            }
+        }
+        for (name, contents) in &plan.ledger_files {
+            let outcome = match contents {
+                Some(text) => ledger.install(name, text.as_bytes(), &[]),
+                None => ledger.take_out(name, &[]),
+            }
+            .map_err(failed)?;
+            match outcome {
+                Outcome::NotOurs if contents.is_some() => out.warn(&format!(
+                    "{name} in the private copy is not the launcher's; it was kept"
+                )),
+                Outcome::Absent | Outcome::NotOurs => {}
+                outcome => out.log.line(&format!("{name}: {outcome:?}")),
             }
         }
         for (name, contents) in &plan.files {

@@ -3,7 +3,7 @@ screen: 1920x1080, Wine: false
 picture: resolution (game's own), fps_limit (game's own), vsync (game's own)
 
 arguments: (none)
-components installed: rea_close_hook.dll, rea_dinput.dll
+components installed: rea_close_hook.dll, rea_dinput.dll, dinput8.dll, Xidi.32.dll, msvcp140.dll, msvcp140_atomic_wait.dll, concrt140.dll, vcruntime140.dll
 components taken out: d3d9.dll
 cmr5.exe imports: rea_close_hook.dll, rea_dinput.dll
 prefer fast GPU: true
@@ -33,3 +33,33 @@ linearity = 0
 ffb_strength = 50
 ffb_invert = off
 log = off
+
+[file Xidi.ini, unless the player's own]
+[Mapper]
+Type = CMR2005Gamepad
+
+[CustomMapper:CMR2005Gamepad]
+Template = StandardGamepad
+TriggerRT = Axis(RotX, -)
+TriggerLT = Axis(RotY, +)
+ButtonStart = Compound(Button(10), Keyboard(Escape))
+ForceFeedback.LeftMotor = MagnitudeProjection(X, Y)
+ForceFeedback.RightMotor = MagnitudeProjection(X, Y)
+
+[Properties]
+UseBuiltInProperties = yes
+DeadzonePercentStickLeft = 5
+DeadzonePercentStickRight = 5
+DeadzonePercentTriggerLT = 0
+DeadzonePercentTriggerRT = 0
+SaturationPercentStickLeft = 100
+SaturationPercentStickRight = 100
+SaturationPercentTriggerLT = 100
+SaturationPercentTriggerRT = 100
+
+[Log]
+Enabled = no
+Level = 1
+
+[Workarounds]
+ActiveVirtualControllerMask = 0x01
