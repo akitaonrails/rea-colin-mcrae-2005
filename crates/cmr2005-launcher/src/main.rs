@@ -307,7 +307,7 @@ mod app {
             wheel_setup.mode.key(),
             if wheel_shown { "sees" } else { "doesn't see" }
         ));
-        let want = controls::Want::for_start(wheel_shown, gamepad, xidi_pad);
+        let want = controls::Want::for_start(wheel_shown, gamepad, xidi_pad_plugged);
         out.log.line(&format!(
             "gamepad (Xidi) {}; slot 2 of OPTIONS for {want}",
             cfg::on_off(gamepad)
@@ -408,13 +408,12 @@ mod app {
         Ok(code as i32)
     }
 
-    /// The ids of the pad in XInput slot 0, the one Xidi shows the game as
-    /// its first controller.
-    fn xidi_pad() -> Option<controls::Ids> {
-        rea_launcher_win32::xinput::ids(0).map(|(vid, pid)| controls::Ids {
-            pid: u32::from(pid),
-            vid: u32::from(vid),
-        })
+    /// Is a pad in XInput slot 0, the one Xidi shows the game as its first
+    /// controller?
+    fn xidi_pad_plugged() -> bool {
+        rea_launcher_win32::xinput::pads()
+            .iter()
+            .any(|pad| pad.slot == 0)
     }
 
     /// Wine's per-program DLL overrides for `cmr5.exe`: the plan's set

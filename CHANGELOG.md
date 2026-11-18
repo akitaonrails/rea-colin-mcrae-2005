@@ -18,9 +18,10 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
   Xidi itself.
 - With an `OPTIONS` written, the launcher sets the pad up in the game's
   controls before a start: the triggers bound, vibration on at 80 %, and
-  player 1 moved from the keyboard to a plugged-in pad. Your changes in
-  the game are kept; a start with the wheel puts the wheel in the pad's
-  place and back again.
+  player 1 moved from the keyboard to the pad when one is plugged in
+  (also on a later start, when the pad was off the first time). Your
+  changes in the game are kept; a start with the wheel puts the wheel in
+  the pad's place and back again.
 
 ### Changed
 

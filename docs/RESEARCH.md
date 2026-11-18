@@ -278,10 +278,16 @@ Static analysis of `cmr5.exe` (GOG 1.1), for the pad's record in
   the Controls screen lists actions 2, 3, 12–18 (`0x600c18`); no pad
   binding pauses that we found, so Start also presses Escape (the PCGW
   module did the same with Back). Unverified with a pad.
-- **Ids:** Xidi 5 passes the physical pad's USB ids on in `guidProduct`
-  (CMR04, verified with an 8BitDo pad), and FFFF:0001 (`guidProduct` `{0001ffff-…}`) with no pad
-  plugged in. The launcher reads slot 0's ids through
-  `XInputGetCapabilitiesEx` (`rea_launcher_win32::xinput::ids`).
+- **Ids:** Xidi 5 gives its first controller the `guidProduct`
+  `{0001ffff-…}` whatever pad is plugged in (`FillVirtualControllerInfo`
+  in its `ControllerIdentification.cpp` sets `guidProduct` to the same
+  virtual-controller GUID as `guidInstance`), so the game stores and
+  matches FFFF:0001. Read in the game's memory with no pad (2026-11-14)
+  and with the owner's 8BitDo (2dc8:310b) plugged in (2026-11-18): a
+  record with the pad's own USB ids is reset by the game to its pad
+  defaults. The launcher seeds FFFF:0001 always, and asks XInput only
+  whether slot 0 (Xidi's controller 1) holds a pad, to move player 1 to
+  it.
 - **Loading:** the runtime's `cmr5.exe` imports `dinput8.dll`; under Wine
   the per-program override `dinput8 = native,builtin` (and the four VC++
   runtime DLLs, which Wine also has) makes it Xidi's. The wheel layer,

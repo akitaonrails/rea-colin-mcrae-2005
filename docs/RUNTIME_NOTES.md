@@ -580,7 +580,7 @@ game's own copy of `OPTIONS`, then a close. Evidence in
 
 | Run | What | Result |
 |---|---|---|
-| x1 | gamepad on (default), wheel off; a real pad of the owner's (8BitDo, XInput 2dc8:310b) was visible to Wine | the launcher installed `dinput8.dll`, `Xidi.32.dll`, the VC++ DLLs and `Xidi.ini`, wrote the `dinput8`/VC++ overrides (`native,builtin`) beside `d3d9`, and seeded slot 2 for the Xidi pad 2dc8:310b (0.5.0's `wheel-records` read, the wheel's record stashed). The stage ran; the re-saved `OPTIONS` held the seed (ids 2dc8:310b, accelerate 17, brake 18, analogue, vibration byte `0x0e`): the game kept it, so Xidi reported the pad's own ids. The game then ended on its own (exit 0) within a minute of the stage start, before the memory read; not seen in any later run, cause unknown |
+| x1 | gamepad on (default), wheel off; a real pad of the owner's (8BitDo, XInput 2dc8:310b) was visible to Wine | the launcher installed `dinput8.dll`, `Xidi.32.dll`, the VC++ DLLs and `Xidi.ini`, wrote the `dinput8`/VC++ overrides (`native,builtin`) beside `d3d9`, and seeded slot 2 for the Xidi pad 2dc8:310b (0.5.0's `wheel-records` read, the wheel's record stashed). The stage ran; the re-saved `OPTIONS` held the seed (ids 2dc8:310b, accelerate 17, brake 18, analogue, vibration byte `0x0e`): the game kept it, so Xidi reported the pad's own ids. The game then ended on its own (exit 0) within a minute of the stage start, before the memory read; not seen in any later run, cause unknown. (The re-saved file is not proof that the game bound the seed: 2026-11-18 read the game's memory and found it doesn't.) |
 | d1 | direct start, Xidi's log on, no pad | Xidi 5.0.0 loaded from the runtime (system DirectInput behind it, no warnings or errors); `CMR2005Gamepad`: X, Y (force feedback), Z, RotX, RotY, RotZ, 12 buttons, a hat; "Xidi virtual controller 1" presented (instance `{0001ffff-…}`). The game created and acquired it, set `DIPROP_RANGE` and `DIPROP_AUTOCENTER`, and made its effects on X and Y: **Sine and ConstantForce created and started** on the Xidi controller, Spring and Damper refused by Xidi (`0x80040154`, effects Xidi doesn't have). Without the launcher the record (ids 2dc8:310b) didn't match Xidi's unplugged ids, **FFFF:0001**, and the game reset it to its pad defaults (digital pedals, Y), keeping the vibration byte. Escape in the stage paused it ("P1 PAUSED … press ESCAPE to unpause") |
 | x2 | through the launcher, gamepad on, no pad | "the Xidi pad ffff:0001 seeded in slot 2"; in the stage the game's copy held it (ids FFFF:0001, accelerate 17, brake 18, analogue; byte 0 `0x0f`, the game's attached bit set): **the game bound the Xidi controller with the launcher's record**. 30 s more in the stage, then Alt+F4 ended everything in 4.0 s; "the Xidi pad ffff:0001's controls kept" |
 | x3 | wheel on, gamepad on | "the virtual wheel's record (with your in-game changes) back in slot 2"; the layer log found "Xidi Virtual Controller 1 … Pad, 6 axes, 12 buttons, force feedback" (so it lists through Xidi, in front of it; its `DIPROP_VIDPID` answer is 0000:0000), created "rea wheel" and the game's Spring, Damper, Sine and Constant effects; the wheel's seed held in the game's memory and the re-saved file |
@@ -596,3 +596,21 @@ the triggers and stick reaching the car (no input was sent); Start's
 Escape with a pad; Xidi's ids for each pad brand (one 8BitDo matched);
 Windows 10/11 with a real pad. The early exit in x1 is open: it is the
 only run where Wine saw a real pad.
+
+### 2026-11-18: the gamepad with the owner's 8BitDo plugged in (issue #2, headless)
+
+Same setup as 2026-11-14 (prefix `prefix-h1`, Wine 11.21, gamescope
+`--backend headless`, a private PipeWire null sink), with the owner's
+8BitDo Ultimate 2 (XInput 2dc8:310b) awake and visible to Wine (no
+winebus values). Evidence in
+`.work/xidi/logs/{x6-pad-awake,d3-xidilog-pad,x7-fixed-pad}`.
+
+| Run | What | Result |
+|---|---|---|
+| x6 | launcher before the fix, gamepad on | "the Xidi pad 2dc8:310b seeded in slot 2". The game stayed up 3 min in the stage (x1's early exit did not come back), closed by Alt+F4 in 3.9 s. **In the game's memory slot 2 held FFFF:0001** with the game's pad defaults (accelerate and brake both on Y, byte 1 `0x02`): the game had reset the seed because the ids didn't match |
+| d3 | direct start, Xidi's log at level 4 | Xidi found "8BitDo Ultimate 2 Wireless Controller" (`vid_2dc8&pid_310b`) on its XInput backend and presented "Xidi virtual controller 1" with instance GUID `{0001ffff-…}`; the game's memory again FFFF:0001. Xidi 5.0.0's source sets `guidProduct` to that same GUID (`ControllerIdentification.cpp`, `FillVirtualControllerInfo`): the ids never follow the pad. Fix: the launcher seeds FFFF:0001 always and asks XInput only whether slot 0 holds a pad |
+| x7 | launcher with the fix, gamepad on | "the Xidi pad ffff:0001's record … back in slot 2"; in the stage the game's memory held the launcher's record: FFFF:0001, accelerate 17 (RT), brake 18 (LT), analogue, attached bit set (`0x0f`), player 1 on slot 2. 2 min in the stage, Alt+F4 ended everything in 3.9 s; no game audio on the host's devices |
+
+Still not verified: the motors and how the game's effects feel, the
+stick and triggers reaching the car (no input was sent), Start's Escape,
+Windows with a real pad.

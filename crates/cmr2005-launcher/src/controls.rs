@@ -80,10 +80,12 @@ pub const VIRTUAL_IDS: Ids = Ids {
     vid: VIRTUAL.vid as u32,
 };
 
-/// Xidi's first controller with no XInput pad plugged in: its
-/// `guidProduct` is `{0001ffff-…}`, so the game stores FFFF:0001 (read
-/// in the game's memory, RUNTIME_NOTES 2026-11-14).
-pub const XIDI_UNPLUGGED: Ids = Ids {
+/// Xidi's first controller, the one the game binds: Xidi 5 gives it the
+/// `guidProduct` `{0001ffff-…}` whatever pad is plugged in (its
+/// `FillVirtualControllerInfo`), so the game stores FFFF:0001 (read in
+/// the game's memory with and without a pad, RUNTIME_NOTES 2026-11-14
+/// and 2026-11-18).
+pub const XIDI_PAD: Ids = Ids {
     pid: 0x0001,
     vid: 0xffff,
 };
@@ -95,9 +97,9 @@ pub enum Want {
     Native,
     /// The virtual wheel: the wheel layer shows it.
     Wheel,
-    /// The Xidi pad with the ids XInput reports for its pad, or Xidi's
-    /// first controller with none plugged in (`None`).
-    Pad(Option<Ids>),
+    /// Xidi's first controller; `plugged`: XInput has a pad in slot 0,
+    /// so player 1 drives with it.
+    Pad { plugged: bool },
 }
 
 impl std::fmt::Display for Want {
@@ -105,20 +107,22 @@ impl std::fmt::Display for Want {
         match self {
             Want::Native => write!(f, "the game's own controller"),
             Want::Wheel => write!(f, "the virtual wheel"),
-            Want::Pad(Some(ids)) => write!(f, "the Xidi pad {ids}"),
-            Want::Pad(None) => write!(f, "Xidi's first controller (no pad plugged in)"),
+            Want::Pad { plugged: true } => write!(f, "the Xidi pad {XIDI_PAD}"),
+            Want::Pad { plugged: false } => {
+                write!(f, "the Xidi pad {XIDI_PAD} (no pad plugged in)")
+            }
         }
     }
 }
 
 impl Want {
     /// What the game is shown in slot 2 for this start: the wheel when
-    /// `wheel`, else the Xidi pad with `gamepad` on (`pad`: its ids,
-    /// asked only then), else the game's own.
-    pub fn for_start(wheel: bool, gamepad: bool, pad: impl FnOnce() -> Option<Ids>) -> Want {
+    /// `wheel`, else the Xidi pad with `gamepad` on (`plugged`: is a pad
+    /// plugged in, asked only then), else the game's own.
+    pub fn for_start(wheel: bool, gamepad: bool, plugged: impl FnOnce() -> bool) -> Want {
         match (wheel, gamepad) {
             (true, _) => Want::Wheel,
-            (false, true) => Want::Pad(pad()),
+            (false, true) => Want::Pad { plugged: plugged() },
             (false, false) => Want::Native,
         }
     }
@@ -421,8 +425,12 @@ pub enum Change {
     /// The Xidi pad's record seeded in slot 2 (and player 1 on it when
     /// `true`).
     PadSeeded(Ids, bool),
-    /// The Xidi pad's stashed record put back in slot 2.
-    PadRestored(Ids),
+    /// The Xidi pad's stashed record put back in slot 2 (and player 1 on
+    /// it when `true`).
+    PadRestored(Ids, bool),
+    /// The Xidi pad's record already in slot 2: player 1 moved from the
+    /// keyboard to it, a pad being plugged in now.
+    PadDriven,
     /// The record the launcher's had displaced put back.
     PutBack(Ids),
 }
@@ -449,9 +457,15 @@ impl Change {
                     ""
                 }
             ),
-            Change::PadRestored(ids) => format!(
-                "OPTIONS: the Xidi pad {ids}'s record (with your in-game changes) back in slot 2"
+            Change::PadRestored(ids, driven) => format!(
+                "OPTIONS: the Xidi pad {ids}'s record (with your in-game changes) back in slot 2{}",
+                if driven {
+                    "; player 1 drives with it"
+                } else {
+                    ""
+                }
             ),
+            Change::PadDriven => "OPTIONS: player 1 drives with the Xidi pad".to_owned(),
             Change::PutBack(ids) => {
                 format!("OPTIONS: the game's own controller record {ids} back in slot 2")
             }
@@ -501,16 +515,22 @@ pub fn before_run(options: &mut [u8], stash: &mut Stash, want: Want) -> Change {
     let here = occupant(&options[wheel_slot()], stash);
     let wanted = match (here, want) {
         (Occupant::Wheel, Want::Wheel) | (Occupant::Native, Want::Native) => true,
-        (Occupant::Pad(ids), Want::Pad(pad)) => ids == pad.unwrap_or(XIDI_UNPLUGGED),
+        (Occupant::Pad(ids), Want::Pad { .. }) => ids == XIDI_PAD,
         _ => false,
     };
-    if wanted || (want == Want::Native && stash.displaced.is_none()) {
+    if wanted {
+        return match want {
+            Want::Pad { plugged } if drive_with_pad(options, plugged) => Change::PadDriven,
+            _ => Change::Untouched,
+        };
+    }
+    if want == Want::Native && stash.displaced.is_none() {
         return Change::Untouched;
     }
     take_out(options, stash, here);
     match want {
         Want::Wheel => show_wheel(options, stash),
-        Want::Pad(pad) => show_pad(options, stash, pad),
+        Want::Pad { plugged } => show_pad(options, stash, plugged),
         Want::Native => put_back(options, stash),
     }
 }
@@ -550,24 +570,39 @@ fn show_wheel(options: &mut [u8], stash: &mut Stash) -> Change {
     change
 }
 
-/// The Xidi pad's record in: its stashed one when it is the same pad,
-/// else [`pad_record`], with player 1 moved from the keyboard to a pad
-/// that is plugged in.
-fn show_pad(options: &mut [u8], stash: &mut Stash, pad: Option<Ids>) -> Change {
-    let wanted = pad.unwrap_or(XIDI_UNPLUGGED);
+/// The Xidi pad's record in: its stashed one, else [`pad_record`], with
+/// player 1 moved from the keyboard to it when a pad is `plugged` in.
+fn show_pad(options: &mut [u8], stash: &mut Stash, plugged: bool) -> Change {
     stash.pad_in_slot = true;
-    if let Some(record) = stash.pad(wanted) {
-        options[wheel_slot()].copy_from_slice(record);
-        return Change::PadRestored(wanted);
+    let restored = match stash.pad(XIDI_PAD) {
+        Some(record) => {
+            options[wheel_slot()].copy_from_slice(record);
+            true
+        }
+        None => {
+            let record = pad_record(XIDI_PAD);
+            options[wheel_slot()].copy_from_slice(&record);
+            stash.keep_pad(record);
+            false
+        }
+    };
+    let driven = drive_with_pad(options, plugged);
+    if restored {
+        Change::PadRestored(XIDI_PAD, driven)
+    } else {
+        Change::PadSeeded(XIDI_PAD, driven)
     }
-    let record = pad_record(wanted);
-    options[wheel_slot()].copy_from_slice(&record);
-    stash.keep_pad(record);
-    let drive = pad.is_some() && u32_at(options, SELECTED) == KEYBOARD_SLOT;
+}
+
+/// Player 1 from the keyboard to slot 2 when a pad is `plugged` in (a
+/// start without one left them on the keyboard); another slot the player
+/// chose in the game stays.
+fn drive_with_pad(options: &mut [u8], plugged: bool) -> bool {
+    let drive = plugged && u32_at(options, SELECTED) == KEYBOARD_SLOT;
     if drive {
         put_u32(options, SELECTED, WHEEL_SLOT);
     }
-    Change::PadSeeded(wanted, drive)
+    drive
 }
 
 /// The displaced record back, and player 1's slot unless the player
@@ -862,7 +897,7 @@ mod tests {
         before_run(&mut bytes, &mut stash, Want::Wheel);
         assert!(stash.wheel.is_some() && stash.displaced.is_some());
         assert_eq!(Stash::parse(&stash.to_bytes()), stash);
-        before_run(&mut bytes, &mut stash, Want::Pad(None));
+        before_run(&mut bytes, &mut stash, Want::Pad { plugged: false });
         assert!(stash.pads.len() == 1 && stash.pad_in_slot);
         assert_eq!(Stash::parse(&stash.to_bytes()), stash);
         let empty = Stash::default();
@@ -900,26 +935,27 @@ mod tests {
         );
     }
 
-    /// The Xidi pad's ids are the pad's own (Xidi 5 passes them on), so
-    /// the record the game kept for the pad read without Xidi is
-    /// displaced, and player 1 moves from the keyboard to the pad.
+    /// The game binds Xidi's first controller by Xidi's ids (FFFF:0001),
+    /// not the pad's own, so the record the game kept for the pad read
+    /// without Xidi is displaced, and player 1 moves from the keyboard to
+    /// the pad.
     #[test]
     fn a_pad_start_seeds_the_xidi_pad_and_player_1_drives_it() {
         let before = options();
         let mut bytes = before.clone();
         let mut stash = Stash::default();
         assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD))),
-            Change::PadSeeded(PAD, true)
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
+            Change::PadSeeded(XIDI_PAD, true)
         );
-        assert_eq!(record(&bytes), pad_record(PAD));
+        assert_eq!(record(&bytes), pad_record(XIDI_PAD));
         assert_eq!(u32_at(&bytes, SELECTED), WHEEL_SLOT);
         assert_eq!(stash.displaced.as_ref().unwrap().record, record(&before));
         for at in changed(&before, &bytes) {
             assert!(wheel_slot().contains(&at) || (SELECTED..SELECTED + 4).contains(&at));
         }
         assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD))),
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
             Change::Untouched
         );
     }
@@ -932,11 +968,37 @@ mod tests {
         let mut bytes = options();
         let mut stash = Stash::default();
         assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(None)),
-            Change::PadSeeded(XIDI_UNPLUGGED, false)
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: false }),
+            Change::PadSeeded(XIDI_PAD, false)
         );
-        assert_eq!(ids(record(&bytes)), XIDI_UNPLUGGED);
-        assert_eq!(u32_at(&bytes, SELECTED), 0);
+        assert_eq!(ids(record(&bytes)), XIDI_PAD);
+        assert_eq!(u32_at(&bytes, SELECTED), KEYBOARD_SLOT);
+    }
+
+    /// A start without the pad left player 1 on the keyboard; the next one
+    /// with it plugged in keeps the same record (the ids don't change) and
+    /// moves player 1 to it. A slot the player chose in the game stays.
+    #[test]
+    fn plugging_the_pad_in_later_moves_player_1_to_it() {
+        let mut bytes = options();
+        let mut stash = Stash::default();
+        before_run(&mut bytes, &mut stash, Want::Pad { plugged: false });
+        bytes[record_at(WHEEL_SLOT)] = 0x06; // vibration strength 1, in the game
+        let tweaked = record(&bytes).to_vec();
+        assert_eq!(after_run(&bytes, &mut stash), Some(Kept::Pad(XIDI_PAD)));
+        assert_eq!(
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
+            Change::PadDriven
+        );
+        assert_eq!(u32_at(&bytes, SELECTED), WHEEL_SLOT);
+        assert_eq!(record(&bytes), tweaked);
+        assert_eq!(stash.pads.len(), 1);
+        put_u32(&mut bytes, SELECTED, 1);
+        assert_eq!(
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
+            Change::Untouched
+        );
+        assert_eq!(u32_at(&bytes, SELECTED), 1);
     }
 
     /// The player's own changes to the pad stay from start to start, and
@@ -946,12 +1008,12 @@ mod tests {
         let original = options();
         let mut bytes = original.clone();
         let mut stash = Stash::default();
-        before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD)));
+        before_run(&mut bytes, &mut stash, Want::Pad { plugged: true });
         bytes[record_at(WHEEL_SLOT)] = 0x06; // vibration strength 1, in the game
-        assert_eq!(after_run(&bytes, &mut stash), Some(Kept::Pad(PAD)));
+        assert_eq!(after_run(&bytes, &mut stash), Some(Kept::Pad(XIDI_PAD)));
         let tweaked = record(&bytes).to_vec();
         assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD))),
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
             Change::Untouched
         );
         assert_eq!(
@@ -961,8 +1023,8 @@ mod tests {
         assert_eq!(bytes, original);
         assert_eq!(after_run(&bytes, &mut stash), None);
         assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD))),
-            Change::PadRestored(PAD)
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
+            Change::PadRestored(XIDI_PAD, true)
         );
         assert_eq!(record(&bytes), tweaked);
     }
@@ -974,18 +1036,18 @@ mod tests {
         let original = options();
         let mut bytes = original.clone();
         let mut stash = Stash::default();
-        before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD)));
+        before_run(&mut bytes, &mut stash, Want::Pad { plugged: true });
         let pad = record(&bytes).to_vec();
         assert_eq!(
             before_run(&mut bytes, &mut stash, Want::Wheel),
             Change::Seeded
         );
         assert_eq!(ids(record(&bytes)), VIRTUAL_IDS);
-        assert_eq!(stash.pad(PAD), Some(&pad[..]));
+        assert_eq!(stash.pad(XIDI_PAD), Some(&pad[..]));
         let wheel = record(&bytes).to_vec();
         assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD))),
-            Change::PadRestored(PAD)
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
+            Change::PadRestored(XIDI_PAD, false)
         );
         assert_eq!(record(&bytes), pad);
         assert_eq!(
@@ -1000,33 +1062,23 @@ mod tests {
         assert_eq!(bytes, original);
     }
 
-    /// Another pad, or the game resetting the launcher's pad record for
-    /// another device: the pad gets the launcher's record again, and the
-    /// game's own record the launcher displaced first is still the one
-    /// that comes back.
+    /// The game resetting the launcher's pad record for another device:
+    /// the pad gets the launcher's record again, and the game's own record
+    /// the launcher displaced first is still the one that comes back.
     #[test]
-    fn another_pad_is_seeded_and_the_games_own_record_is_kept() {
+    fn a_reset_pad_record_is_seeded_again_and_the_games_own_is_kept() {
         let original = options();
         let mut bytes = original.clone();
         let mut stash = Stash::default();
-        before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD)));
-        let other = Ids {
-            pid: 0x6012,
-            vid: 0x2dc8,
-        };
-        assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(other))),
-            Change::PadSeeded(other, false)
-        );
-        // The game reset slot 2 for a device Xidi listed differently.
+        before_run(&mut bytes, &mut stash, Want::Pad { plugged: true });
         let at = record_at(WHEEL_SLOT);
         put_u32(&mut bytes, at + PID, 0x1234);
         assert_eq!(after_run(&bytes, &mut stash), None);
         assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(other))),
-            Change::PadRestored(other)
+            before_run(&mut bytes, &mut stash, Want::Pad { plugged: true }),
+            Change::PadRestored(XIDI_PAD, false)
         );
-        assert_eq!(record(&bytes), pad_record(other));
+        assert_eq!(record(&bytes), pad_record(XIDI_PAD));
         assert_eq!(
             before_run(&mut bytes, &mut stash, Want::Native),
             Change::PutBack(PAD)
@@ -1034,39 +1086,24 @@ mod tests {
         assert_eq!(bytes, original);
     }
 
-    /// A start without the pad plugged in (Xidi's own controller in slot
-    /// 2) keeps the pad's record for when it is back.
-    #[test]
-    fn each_pad_keeps_its_own_record() {
-        let mut bytes = options();
-        let mut stash = Stash::default();
-        before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD)));
-        bytes[record_at(WHEEL_SLOT)] = 0x06;
-        let tweaked = record(&bytes).to_vec();
-        assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(None)),
-            Change::PadSeeded(XIDI_UNPLUGGED, false)
-        );
-        assert_eq!(
-            before_run(&mut bytes, &mut stash, Want::Pad(Some(PAD))),
-            Change::PadRestored(PAD)
-        );
-        assert_eq!(record(&bytes), tweaked);
-        assert_eq!(stash.pads.len(), 2);
-        assert_eq!(Stash::parse(&stash.to_bytes()), stash);
-    }
-
     #[test]
     fn the_start_wants_the_wheel_then_the_pad_then_the_games_own() {
-        let unasked = || -> Option<Ids> { panic!("asked for the pad") };
+        let unasked = || -> bool { panic!("asked for the pad") };
         assert_eq!(Want::for_start(true, true, unasked), Want::Wheel);
         assert_eq!(Want::for_start(false, false, unasked), Want::Native);
         assert_eq!(
-            Want::for_start(false, true, || Some(PAD)),
-            Want::Pad(Some(PAD))
+            Want::for_start(false, true, || true),
+            Want::Pad { plugged: true }
         );
         assert_eq!(PAD.to_string(), "045e:028e");
-        assert_eq!(Want::Pad(Some(PAD)).to_string(), "the Xidi pad 045e:028e");
+        assert_eq!(
+            Want::Pad { plugged: true }.to_string(),
+            "the Xidi pad ffff:0001"
+        );
+        assert_eq!(
+            Want::Pad { plugged: false }.to_string(),
+            "the Xidi pad ffff:0001 (no pad plugged in)"
+        );
     }
 
     /// Launcher 0.5.0's stash (no pad yet) still reads.
