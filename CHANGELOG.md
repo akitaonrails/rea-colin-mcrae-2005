@@ -5,6 +5,8 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-20
+
 ### Added
 
 - **Gamepad vibration and trigger pedals** (#2). The launcher's copy of
