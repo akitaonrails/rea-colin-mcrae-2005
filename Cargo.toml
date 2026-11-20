@@ -13,19 +13,19 @@ repository = "https://github.com/akitaonrails/rea-colin-mcrae-2005"
 # change the tag on all six lines, re-run `scripts/sdk-sync` from that SDK
 # checkout and move the `@vX.Y.Z` of the workflows in .github/workflows/build.yml
 # (rea-launcher-sdk docs/playbooks/sdk-change.md).
-rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.9.0" }
-rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.9.0" }
-rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.9.0" }
+rea-launcher = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.12.3" }
+rea-launcher-win32 = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.12.3" }
+rea-launcher-ui = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.12.3" }
 # build.rs: version information, icon and manifest in CMR2005Launcher.exe.
-rea-launcher-build = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.9.0" }
+rea-launcher-build = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.12.3" }
 # The close hook and wheel layer DLLs shipped in components/ (each built
 # with its `dll` feature: `cargo build -p rea-launcher-close-hook --features
 # rea-launcher-close-hook/dll`, the same for rea-launcher-dinput). The
 # launcher links their libraries without it (one exe can't hold both
 # DllMains): import_into edits the runtime copy of cmr5.exe, and the hook's
 # parser checks our configuration in the host tests.
-rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.9.0", default-features = false }
-rea-launcher-dinput = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.9.0", default-features = false }
+rea-launcher-close-hook = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.12.3", default-features = false }
+rea-launcher-dinput = { git = "https://github.com/akitaonrails/rea-launcher-sdk", tag = "v0.12.3", default-features = false }
 
 [profile.release]
 panic = "abort"

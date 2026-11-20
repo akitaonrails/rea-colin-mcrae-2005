@@ -336,13 +336,19 @@ mod app {
                 }));
             }
         }
+        let aspect_desktop = plan::aspect_virtual_desktop(wine, gamescope, screen, picture.size());
+        let desktop = placement
+            .virtual_desktop
+            .then_some(screen)
+            .flatten()
+            .or(aspect_desktop);
         let plan = plan::plan_on(
             &picture,
             settings.advanced_particles(),
             &folders.runtime,
             &folders.saves,
             wine,
-            placement.virtual_desktop.then_some(screen).flatten(),
+            desktop,
         )
         .with_wheel(wheel_shown, wheel::runtime_ini(wheel_setup, &calibration))
         .with_gamepad(gamepad, wine);
@@ -371,11 +377,17 @@ mod app {
             }
         }
         let mut launch = match plan.virtual_desktop {
-            // The main monitor is portrait: the game sees one landscape
-            // screen, Wine's virtual desktop (Wine's explorer starts it there).
+            // Portrait main monitor outside gamescope, or aspect mismatch
+            // inside gamescope (e.g. Steam Deck Game Mode 1280x800 with
+            // 1280x720): run in a Wine virtual desktop of the game's size.
             Some(size) => {
+                let reason = if placement.virtual_desktop {
+                    "the main monitor is portrait"
+                } else {
+                    "gamescope screen aspect differs from the game's"
+                };
                 out.log.line(&format!(
-                    "the main monitor is portrait: the game runs in a {}x{} Wine virtual desktop",
+                    "{reason}: the game runs in a {}x{} Wine virtual desktop",
                     size.0, size.1
                 ));
                 let exe_text = exe.display().to_string();

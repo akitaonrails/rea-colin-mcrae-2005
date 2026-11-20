@@ -39,7 +39,7 @@ OWN_WINDOW_API='rea_launcher_win32::instance::Window::Own'
 # Golden snapshots with the crate version masked.
 SNAPSHOT_API='rea_launcher::snapshot rea_launcher::snapshots rea_launcher::testing'
 # A native Linux launcher's errors in a message window.
-NATIVE_REPORT_API='rea_launcher_ui::report::fatal'
+NATIVE_REPORT_API='rea_launcher_ui::report::fatal rea_launcher_ui::hub::fatal'
 # Linux pads in a native window; GLX on a fresh prefix.
 JOYSTICK_API='rea_launcher_ui::pad::joystick::Joysticks'
 GLX_API='rea_launcher_win32::gpu::prefer_glx_or_restart'
@@ -99,7 +99,7 @@ rule() {
       FIX="find the window with $OWN_WINDOW_API(TITLE) (running.second_start(action, Window::Own(TITLE)))" ;;
     native-report) SEV=error SINCE=$NEW_API_SINCE
       WHY='A native Linux launcher double-clicked with a missing or unknown game printed to stderr and exited: the player saw nothing (DiRT Rally).'
-      FIX="show errors before the window with $NATIVE_REPORT_API (the unknown-edition form as its link)" ;;
+      FIX="show errors before the window with rea_launcher_ui::report::fatal, or rea_launcher_ui::hub::fatal in a hub launcher (the unknown-edition form as its link)" ;;
     native-pad) SEV=warn SINCE=$NEW_API_SINCE
       WHY='The SDK reads Linux pads for native windows; a local /dev/input/js reader is a copy to keep in step.'
       FIX="use $JOYSTICK_API and feed its buttons() to PadNav" ;;
@@ -195,7 +195,7 @@ rule() {
       FIX='pin the file the release uploads (https://github.com/OWNER/REPO/releases/download/TAG/FILE), or take the component out of the watch list when its releases upload nothing (sdk/docs/playbooks/community-components.md)' ;;
     unwatched-pins) SEV=warn
       WHY='A pinned component nobody watches falls behind silently: CMR4 still bundles Xidi 4.3.1 while Xidi 5 changed its files and settings, and only CMR3, which runs the watch, heard of it.'
-      FIX='add the component to packaging/upstream-watch.txt (name owner/repo asset-prefix) and call the SDK upstream-watch.yml from .github/workflows/watch-upstream.yml (templates/launcher has both)' ;;
+      FIX='add the component to packaging/upstream-watch.txt (name owner/repo asset, where asset is a prefix or a * pattern) and call the SDK upstream-watch.yml from .github/workflows/watch-upstream.yml (templates/launcher has both)' ;;
     innoextract) SEV=error
       WHY='A launcher that unpacks a game'"'"'s installer runs the bundled innoextract.exe (docs/playbooks/installers.md). Without its pins the package ships without it (or with an unverified copy), and without a THIRD_PARTY.md entry its zlib licence and the Boost, liblzma and libstdc++ texts go uncredited.'
       FIX='add the two pin lines (innoextract and innoextract-exe; sdk/packaging/innoextract.sh innoextract_pins prints them) to packaging/third-party.txt, bundle it with innoextract_bundle, and list innoextract 1.9 with its licences in THIRD_PARTY.md' ;;

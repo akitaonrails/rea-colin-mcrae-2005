@@ -5,6 +5,20 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more 3.4 GB data duplication under Wine / Steam Deck** (#3): updated
+  `rea-launcher-sdk` to v0.12.3 so `data/` and `fonts/` fall back to file
+  symbolic links when hard links cannot cross drives (such as Wine's `Z:`
+  to `C:` on Linux / Steam Deck), instead of copying all 3.4 GB into the
+  private runtime folder.
+- **Steam Deck Game Mode aspect ratio** (#4): when running under Wine inside
+  gamescope on a screen whose aspect ratio differs from the game's picture
+  (such as Steam Deck Game Mode's 1280×800 screen with the 1280×720 16:9
+  preset), the launcher now runs `cmr5.exe` in a matching Wine virtual
+  desktop (`1280×720`) so gamescope letterboxes it cleanly instead of
+  stretching vertically to 16:10.
+
 ## [0.6.0] - 2026-11-20
 
 ### Added

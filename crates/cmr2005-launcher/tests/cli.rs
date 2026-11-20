@@ -71,6 +71,7 @@ fn every_option_has_a_working_flag() {
                 number = min.to_string();
                 &number
             }
+            Kind::Decimal { .. } => "0",
             Kind::Path | Kind::Text => "C:\\Games\\Some Game",
         };
         let flag = row.flag_name(config::STYLE);

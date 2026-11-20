@@ -102,6 +102,24 @@ pub fn desktop_args(size: (u32, u32), exe: &str, args: &[&str]) -> Vec<String> {
     out
 }
 
+/// Whether the game should run in a Wine virtual desktop to keep its aspect
+/// ratio inside gamescope (e.g. Steam Deck Game Mode's 1280×800 screen with
+/// the game's 1280×720 16:9 picture): gamescope's Xwayland stretches an
+/// exclusive-fullscreen D3D9 surface to fill the 1280×800 canvas, whereas a
+/// 1280×720 Wine virtual desktop hands gamescope a 16:9 window it letterboxes.
+pub fn aspect_virtual_desktop(
+    wine: bool,
+    gamescope: bool,
+    screen: Option<(u32, u32)>,
+    picture: Option<(u32, u32)>,
+) -> Option<(u32, u32)> {
+    if !wine || !gamescope {
+        return None;
+    }
+    let ((sw, sh), (pw, ph)) = (screen?, picture?);
+    (u64::from(pw) * u64::from(sh) != u64::from(ph) * u64::from(sw)).then_some((pw, ph))
+}
+
 /// The plan for `picture` (and the game's Advanced particles unlocked or
 /// not) with the game running from `runtime` and saving to `saves`, under
 /// Wine or not.
@@ -402,6 +420,34 @@ mod tests {
                 r"C:\r\cmr5.exe",
                 "WIDESCREENDISPLAY"
             ]
+        );
+    }
+
+    #[test]
+    fn gamescope_aspect_mismatch_uses_a_virtual_desktop() {
+        // Steam Deck Game Mode (1280x800) with 1280x720 16:9 game picture.
+        assert_eq!(
+            aspect_virtual_desktop(true, true, Some((1280, 800)), Some((1280, 720))),
+            Some((1280, 720))
+        );
+        // Same aspect ratio (16:9 on 16:9): no virtual desktop needed.
+        assert_eq!(
+            aspect_virtual_desktop(true, true, Some((1920, 1080)), Some((1920, 1080))),
+            None
+        );
+        // Outside gamescope or not under Wine: no virtual desktop.
+        assert_eq!(
+            aspect_virtual_desktop(true, false, Some((1280, 800)), Some((1280, 720))),
+            None
+        );
+        assert_eq!(
+            aspect_virtual_desktop(false, true, Some((1280, 800)), Some((1280, 720))),
+            None
+        );
+        // Original look (no fixed resolution): no virtual desktop.
+        assert_eq!(
+            aspect_virtual_desktop(true, true, Some((1280, 800)), None),
+            None
         );
     }
 
