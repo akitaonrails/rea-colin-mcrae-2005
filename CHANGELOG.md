@@ -5,6 +5,8 @@ All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tag
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-20
+
 ### Fixed
 
 - **No more 3.4 GB data duplication under Wine / Steam Deck** (#3): updated
