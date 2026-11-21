@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+## [0.6.2] - 2026-11-21
+
 ### Changed
 
 - Replaced placeholder launcher icon with custom high-contrast 256×256 CMR 2005 rally artwork for Windows executable and Linux AppImage shortcuts.
