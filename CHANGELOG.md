@@ -1,5 +1,12 @@
 # Changelog
 
+
+## Unreleased
+
+### Changed
+
+- Replaced placeholder launcher icon with custom high-contrast 256×256 CMR 2005 rally artwork for Windows executable and Linux AppImage shortcuts.
+
 All notable changes to the Colin McRae Rally 2005 launcher. Versions are git tags
 (`vX.Y.Z`) matching the `cmr2005-launcher` crate version.
 
